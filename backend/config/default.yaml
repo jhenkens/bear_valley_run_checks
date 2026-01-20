@@ -77,3 +77,7 @@ env:
   emailFrom: noreply@example.com
   appUrl: http://localhost:3000
   port: 3000
+  googleSheetsId: '' # Source of truth for run names
+  googleDriveFolderId: '' # Folder where daily spreadsheets are created
+  googleServiceAccountEmail: ''
+  googlePrivateKey: ''

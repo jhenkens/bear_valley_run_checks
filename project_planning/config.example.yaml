@@ -5,6 +5,10 @@
 # Run Provider: 'config' or 'sheets'
 # - 'config': Loads runs from this file (for development)
 # - 'sheets': Loads runs from Google Sheets template (for production)
+#   When using 'sheets':
+#   - googleSheetsId: Source spreadsheet for run names (read-only reference)
+#   - googleDriveFolderId: Folder where daily check spreadsheets are created
+#   - Each day, a new spreadsheet is created in the folder named YYYY-MM-DD
 runProvider: config
 
 # Runs configuration (only used when runProvider = 'config')

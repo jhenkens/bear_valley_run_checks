@@ -37,6 +37,7 @@ export interface AppConfig {
     appUrl: string;
     port: number;
     googleSheetsId?: string;
+    googleDriveFolderId?: string;
     googleServiceAccountEmail?: string;
     googlePrivateKey?: string;
   };

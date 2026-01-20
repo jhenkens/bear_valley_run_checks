@@ -52,6 +52,7 @@ EXPOSE 3000
 
 # Set environment
 ENV NODE_ENV=production
+ENV DATABASE_URL=file:/app/data/production.db
 
 # Start server
 CMD ["node", "dist/index.js"]

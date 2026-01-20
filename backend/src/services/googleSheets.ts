@@ -12,7 +12,10 @@ export interface RunCheck {
 }
 
 let sheets: any = null;
-let spreadsheetId: string = '';
+let drive: any = null;
+let sourceSpreadsheetId: string = ''; // Source of truth for run names
+let dailySpreadsheetId: string = ''; // Today's spreadsheet for checks
+let dailySpreadsheetDate: string = ''; // Track which day's spreadsheet we have
 
 export async function initializeGoogleSheets(): Promise<void> {
   // Skip in development mode
@@ -25,8 +28,8 @@ export async function initializeGoogleSheets(): Promise<void> {
     return;
   }
 
-  if (!appConfig.env.googleSheetsId || !appConfig.env.googleServiceAccountEmail || !appConfig.env.googlePrivateKey) {
-    throw new Error('Google Sheets credentials not configured');
+  if (!appConfig.env.googleSheetsId || !appConfig.env.googleDriveFolderId || !appConfig.env.googleServiceAccountEmail || !appConfig.env.googlePrivateKey) {
+    throw new Error('Google Sheets/Drive credentials not configured');
   }
 
   const auth = new google.auth.GoogleAuth({
@@ -34,13 +37,19 @@ export async function initializeGoogleSheets(): Promise<void> {
       client_email: appConfig.env.googleServiceAccountEmail,
       private_key: appConfig.env.googlePrivateKey.replace(/\\n/g, '\n'),
     },
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    scopes: [
+      'https://www.googleapis.com/auth/spreadsheets',
+      'https://www.googleapis.com/auth/drive.file'
+    ],
   });
 
   sheets = google.sheets({ version: 'v4', auth });
-  spreadsheetId = appConfig.env.googleSheetsId;
+  drive = google.drive({ version: 'v3', auth });
+  sourceSpreadsheetId = appConfig.env.googleSheetsId;
 
-  logger.info('Google Sheets API initialized');
+  logger.info('Google Sheets and Drive API initialized');
+  logger.info(`Source spreadsheet: ${sourceSpreadsheetId}`);
+  logger.info(`Daily spreadsheets folder: ${appConfig.env.googleDriveFolderId}`);
 }
 
 function getTodaySheetName(): string {
@@ -48,52 +57,81 @@ function getTodaySheetName(): string {
   return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 }
 
-export async function ensureDailySheet(): Promise<string> {
-  const sheetName = getTodaySheetName();
+// Helper functions for other services
+export function getSheetsClient(): any {
+  return sheets;
+}
+
+export function getSourceSpreadsheetId(): string {
+  return sourceSpreadsheetId;
+}
+
+export async function ensureDailySpreadsheet(): Promise<string> {
+  const today = getTodaySheetName();
+  
+  // Check if we already have today's spreadsheet ID cached
+  if (dailySpreadsheetId && dailySpreadsheetDate === today) {
+    return dailySpreadsheetId;
+  }
 
   try {
-    // Check if sheet exists
-    const response = await sheets.spreadsheets.get({
-      spreadsheetId,
+    // Search for existing spreadsheet in the folder
+    const searchResponse = await drive.files.list({
+      q: `name='${today}' and '${appConfig.env.googleDriveFolderId}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`,
+      fields: 'files(id, name)',
+      spaces: 'drive',
     });
 
-    const sheetExists = response.data.sheets?.some(
-      (sheet: any) => sheet.properties.title === sheetName
-    );
-
-    if (!sheetExists) {
-      // Create new sheet with headers
-      await sheets.spreadsheets.batchUpdate({
-        spreadsheetId,
-        requestBody: {
-          requests: [
-            {
-              addSheet: {
-                properties: {
-                  title: sheetName,
-                },
-              },
-            },
-          ],
-        },
-      });
-
-      // Add headers
-      await sheets.spreadsheets.values.update({
-        spreadsheetId,
-        range: `${sheetName}!A1:E1`,
-        valueInputOption: 'RAW',
-        requestBody: {
-          values: [['Timestamp', 'Check Time', 'Section', 'Run Name', 'Patroller']],
-        },
-      });
-
-      logger.info(`Created daily sheet: ${sheetName}`);
+    if (searchResponse.data.files && searchResponse.data.files.length > 0) {
+      // Found existing spreadsheet
+      dailySpreadsheetId = searchResponse.data.files[0].id;
+      dailySpreadsheetDate = today;
+      logger.info(`Found existing daily spreadsheet: ${today} (${dailySpreadsheetId})`);
+      return dailySpreadsheetId;
     }
 
-    return sheetName;
+    // Create new spreadsheet
+    const createResponse = await sheets.spreadsheets.create({
+      requestBody: {
+        properties: {
+          title: today,
+        },
+        sheets: [
+          {
+            properties: {
+              title: 'Run Checks',
+            },
+          },
+        ],
+      },
+    });
+
+    const newSpreadsheetId = createResponse.data.spreadsheetId;
+
+    // Move to the specified folder
+    await drive.files.update({
+      fileId: newSpreadsheetId,
+      addParents: appConfig.env.googleDriveFolderId,
+      fields: 'id, parents',
+    });
+
+    // Add headers
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: newSpreadsheetId,
+      range: 'Run Checks!A1:E1',
+      valueInputOption: 'RAW',
+      requestBody: {
+        values: [['Timestamp', 'Check Time', 'Section', 'Run Name', 'Patroller']],
+      },
+    });
+
+    dailySpreadsheetId = newSpreadsheetId!;
+    dailySpreadsheetDate = today;
+    logger.info(`Created new daily spreadsheet: ${today} (${dailySpreadsheetId})`);
+    
+    return dailySpreadsheetId;
   } catch (error) {
-    logger.error('Error ensuring daily sheet:', error);
+    logger.error('Error ensuring daily spreadsheet:', error);
     throw error;
   }
 }
@@ -103,17 +141,17 @@ export async function loadTodayChecks(): Promise<RunCheck[]> {
     return [];
   }
 
-  const sheetName = getTodaySheetName();
-
   try {
+    const spreadsheetId = await ensureDailySpreadsheet();
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: `${sheetName}!A2:E`,
+      range: 'Run Checks!A2:E',
     });
 
     const rows = response.data.values || [];
+    const today = getTodaySheetName();
     return rows.map((row: string[], index: number) => ({
-      id: `${sheetName}-${index}`,
+      id: `${today}-${index}`,
       runName: row[3] || '',
       section: row[2] || '',
       patroller: row[4] || '',
@@ -121,7 +159,7 @@ export async function loadTodayChecks(): Promise<RunCheck[]> {
       createdAt: new Date(row[0]),
     }));
   } catch (error) {
-    logger.error('Error loading checks from sheet:', error);
+    logger.error('Error loading checks from spreadsheet:', error);
     return [];
   }
 }
@@ -131,13 +169,13 @@ export async function appendRunCheck(check: Omit<RunCheck, 'id' | 'createdAt'>):
     return;
   }
 
-  const sheetName = await ensureDailySheet();
+  const spreadsheetId = await ensureDailySpreadsheet();
   const now = new Date().toISOString();
 
   try {
     await sheets.spreadsheets.values.append({
       spreadsheetId,
-      range: `${sheetName}!A:E`,
+      range: 'Run Checks!A:E',
       valueInputOption: 'RAW',
       requestBody: {
         values: [[
@@ -150,7 +188,7 @@ export async function appendRunCheck(check: Omit<RunCheck, 'id' | 'createdAt'>):
       },
     });
   } catch (error) {
-    logger.error('Error appending check to sheet:', error);
+    logger.error('Error appending check to spreadsheet:', error);
     throw error;
   }
 }

@@ -208,14 +208,36 @@ Uses runs defined in `config.yaml`. Fast and simple for development.
 
 ### Sheets Provider (Production)
 
-Integrates with Google Sheets for dynamic run lists and persistent storage.
+Integrates with Google Sheets and Google Drive for dynamic run lists and persistent storage.
+
+**How it works:**
+- **Source Spreadsheet** (GOOGLE_SHEETS_ID): Contains run names - used as read-only reference
+  - Must have columns named "Section" and "Run Name" (case-insensitive)
+  - First sheet in the workbook is read
+  - Header row is automatically detected
+- **Daily Spreadsheets**: A new spreadsheet is automatically created each day in a specified Drive folder (GOOGLE_DRIVE_FOLDER_ID)
+- Each daily spreadsheet is named `YYYY-MM-DD` and contains that day's run checks
+
+**Source Spreadsheet Format:**
+```
+| Section        | Run Name         | (other columns optional) |
+|----------------|------------------|--------------------------|
+| Bear Cub       | Grizzly (Upper)  | ...                      |
+| Bear Cub       | Grizzly (Lower)  | ...                      |
+| Lower Mountain | Exhibition       | ...                      |
+```
 
 Setup:
 1. Create a Google Cloud project
-2. Enable Google Sheets API
-3. Create a service account
-4. Share your spreadsheet with the service account email
-5. Configure environment variables with credentials
+2. Enable Google Sheets API and Google Drive API
+3. Create a service account and download credentials
+4. Create a Google Drive folder for daily spreadsheets
+5. Share both the source spreadsheet AND the Drive folder with the service account email
+6. Configure environment variables:
+   - `GOOGLE_SHEETS_ID`: ID of your source spreadsheet (for run names)
+   - `GOOGLE_DRIVE_FOLDER_ID`: ID of the folder where daily spreadsheets will be created
+   - `GOOGLE_SERVICE_ACCOUNT_EMAIL`: Service account email
+   - `GOOGLE_PRIVATE_KEY`: Private key from service account credentials
 
 ## User Management
 
