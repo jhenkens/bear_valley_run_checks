@@ -81,41 +81,69 @@ router.get('/oauth/callback', requireAuth, async (req, res) => {
     const drive = google.drive({ version: 'v3', auth: oauth2Client });
     const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
 
-    // Create a folder for Bear Valley run checks
-    const folderMetadata = {
-      name: 'Bear Valley Run Checks',
-      mimeType: 'application/vnd.google-apps.folder',
-    };
-    const folderResponse = await drive.files.create({
-      requestBody: folderMetadata,
-      fields: 'id, name',
+    // Search for existing "Bear Valley Run Checks" folder
+    const folderSearchResponse = await drive.files.list({
+      q: "name='Bear Valley Run Checks' and mimeType='application/vnd.google-apps.folder' and trashed=false",
+      fields: 'files(id, name)',
+      spaces: 'drive',
     });
-    const folderId = folderResponse.data.id || '';
-    logger.info('Created Drive folder', { folderId, folderName: folderResponse.data.name });
 
-    // Create Run Names spreadsheet in the folder
-    const spreadsheetMetadata = {
-      name: 'Run Names',
-      mimeType: 'application/vnd.google-apps.spreadsheet',
-      parents: [folderId],
-    };
-    const spreadsheetResponse = await drive.files.create({
-      requestBody: spreadsheetMetadata,
-      fields: 'id, name',
-    });
-    const runNamesSheetId = spreadsheetResponse.data.id || '';
-    logger.info('Created Run Names spreadsheet', { spreadsheetId: runNamesSheetId });
+    let folderId: string;
+    if (folderSearchResponse.data.files && folderSearchResponse.data.files.length > 0) {
+      // Reuse existing folder
+      folderId = folderSearchResponse.data.files[0].id || '';
+      logger.info('Found existing Drive folder', { folderId, folderName: folderSearchResponse.data.files[0].name });
+    } else {
+      // Create new folder
+      const folderMetadata = {
+        name: 'Bear Valley Run Checks',
+        mimeType: 'application/vnd.google-apps.folder',
+      };
+      const folderResponse = await drive.files.create({
+        requestBody: folderMetadata,
+        fields: 'id, name',
+      });
+      folderId = folderResponse.data.id || '';
+      logger.info('Created new Drive folder', { folderId, folderName: folderResponse.data.name });
+    }
 
-    // Initialize the spreadsheet with headers
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: runNamesSheetId,
-      range: 'Sheet1!A1:B1',
-      valueInputOption: 'RAW',
-      requestBody: {
-        values: [['Section', 'Run Name']],
-      },
+    // Search for existing "Run Names" spreadsheet in the folder
+    const sheetSearchResponse = await drive.files.list({
+      q: `name='Run Names' and '${folderId}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`,
+      fields: 'files(id, name)',
+      spaces: 'drive',
     });
-    logger.info('Initialized Run Names spreadsheet with headers');
+
+    let runNamesSheetId: string;
+    if (sheetSearchResponse.data.files && sheetSearchResponse.data.files.length > 0) {
+      // Reuse existing spreadsheet
+      runNamesSheetId = sheetSearchResponse.data.files[0].id || '';
+      logger.info('Found existing Run Names spreadsheet', { spreadsheetId: runNamesSheetId });
+    } else {
+      // Create new spreadsheet
+      const spreadsheetMetadata = {
+        name: 'Run Names',
+        mimeType: 'application/vnd.google-apps.spreadsheet',
+        parents: [folderId],
+      };
+      const spreadsheetResponse = await drive.files.create({
+        requestBody: spreadsheetMetadata,
+        fields: 'id, name',
+      });
+      runNamesSheetId = spreadsheetResponse.data.id || '';
+      logger.info('Created new Run Names spreadsheet', { spreadsheetId: runNamesSheetId });
+
+      // Initialize the spreadsheet with headers (only for new spreadsheets)
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: runNamesSheetId,
+        range: 'Sheet1!A1:B1',
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: [['Section', 'Run Name']],
+        },
+      });
+      logger.info('Initialized Run Names spreadsheet with headers');
+    }
 
     // Store or update OAuth credentials in database
     await prisma.googleOAuth.upsert({
