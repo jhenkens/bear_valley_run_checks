@@ -1,5 +1,5 @@
 import { google } from 'googleapis';
-import { config } from '../config/config';
+import { appConfig } from '../config/config';
 import { logger } from '../utils/logger';
 
 export interface RunCheck {
@@ -21,24 +21,24 @@ export async function initializeGoogleSheets(): Promise<void> {
     return;
   }
 
-  if (config.runProvider !== 'sheets') {
+  if (appConfig.runProvider !== 'sheets') {
     return;
   }
 
-  if (!config.env.googleSheetsId || !config.env.googleServiceAccountEmail || !config.env.googlePrivateKey) {
+  if (!appConfig.env.googleSheetsId || !appConfig.env.googleServiceAccountEmail || !appConfig.env.googlePrivateKey) {
     throw new Error('Google Sheets credentials not configured');
   }
 
   const auth = new google.auth.GoogleAuth({
     credentials: {
-      client_email: config.env.googleServiceAccountEmail,
-      private_key: config.env.googlePrivateKey.replace(/\\n/g, '\n'),
+      client_email: appConfig.env.googleServiceAccountEmail,
+      private_key: appConfig.env.googlePrivateKey.replace(/\\n/g, '\n'),
     },
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
 
   sheets = google.sheets({ version: 'v4', auth });
-  spreadsheetId = config.env.googleSheetsId;
+  spreadsheetId = appConfig.env.googleSheetsId;
 
   logger.info('Google Sheets API initialized');
 }
@@ -99,7 +99,7 @@ export async function ensureDailySheet(): Promise<string> {
 }
 
 export async function loadTodayChecks(): Promise<RunCheck[]> {
-  if (config.runProvider !== 'sheets' || process.env.NODE_ENV !== 'production') {
+  if (appConfig.runProvider !== 'sheets' || process.env.NODE_ENV !== 'production') {
     return [];
   }
 
@@ -127,7 +127,7 @@ export async function loadTodayChecks(): Promise<RunCheck[]> {
 }
 
 export async function appendRunCheck(check: Omit<RunCheck, 'id' | 'createdAt'>): Promise<void> {
-  if (config.runProvider !== 'sheets' || process.env.NODE_ENV !== 'production') {
+  if (appConfig.runProvider !== 'sheets' || process.env.NODE_ENV !== 'production') {
     return;
   }
 

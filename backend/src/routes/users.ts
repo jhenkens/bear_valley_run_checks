@@ -4,6 +4,7 @@ import { generateMagicLink } from '../auth/magicLink';
 import { sendWelcomeEmail } from '../services/email';
 import { requireAdmin, AuthRequest } from '../auth/middleware';
 import { isSuperuser } from '../services/patrollerService';
+import { appConfig } from '../config/config';
 
 const router = Router();
 
@@ -67,16 +68,30 @@ router.post('/users', requireAdmin, async (req, res) => {
       },
     });
 
-    // Generate magic link and send welcome email
+    // Generate magic link and optionally send welcome email
     const token = await generateMagicLink(emailLower);
-    await sendWelcomeEmail(emailLower, token);
+    let emailSent = false;
+    let message = 'User created';
+
+    if (!appConfig.disableMagicLink) {
+      try {
+        await sendWelcomeEmail(emailLower, token);
+        emailSent = true;
+        message = 'User created and welcome email sent';
+      } catch (emailError) {
+        console.error('Failed to send welcome email:', emailError);
+        message = 'User created (email sending failed - please check SMTP configuration)';
+      }
+    } else {
+      message = 'User created (email disabled in dev mode)';
+    }
 
     res.json({
       user: {
         ...user,
         isSuperuser: false,
       },
-      message: 'User created and welcome email sent',
+      message,
     });
   } catch (error) {
     console.error('Error creating user:', error);

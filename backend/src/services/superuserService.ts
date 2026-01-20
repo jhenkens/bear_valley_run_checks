@@ -1,5 +1,5 @@
 import { getPrismaClient } from '../config/database';
-import { config } from '../config/config';
+import { appConfig } from '../config/config';
 import { logger } from '../utils/logger';
 
 /**
@@ -11,9 +11,9 @@ import { logger } from '../utils/logger';
 export async function syncSuperusers(): Promise<void> {
   const prisma = getPrismaClient();
 
-  logger.info(`Syncing ${config.superusers.length} superusers from config...`);
+  logger.info(`Syncing ${appConfig.superusers.length} superusers from config...`);
 
-  for (const superuser of config.superusers) {
+  for (const superuser of appConfig.superusers) {
     try {
       const existing = await prisma.user.findUnique({
         where: { email: superuser.email },
@@ -47,9 +47,9 @@ export async function syncSuperusers(): Promise<void> {
 }
 
 export function isSuperuser(email: string): boolean {
-  return config.superusers.some(su => su.email === email);
+  return appConfig.superusers.some(su => su.email === email);
 }
 
 export function getSuperuserEmails(): string[] {
-  return config.superusers.map(su => su.email);
+  return appConfig.superusers.map(su => su.email);
 }

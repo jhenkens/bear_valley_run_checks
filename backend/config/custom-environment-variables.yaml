@@ -1,0 +1,18 @@
+# Environment variable mappings for the config package
+# This file maps environment variables to configuration keys
+
+runProvider: RUN_PROVIDER
+
+env:
+  databaseUrl: DATABASE_URL
+  sessionSecret: SESSION_SECRET
+  smtpHost: SMTP_HOST
+  smtpPort: SMTP_PORT
+  smtpUser: SMTP_USER
+  smtpPass: SMTP_PASS
+  emailFrom: EMAIL_FROM
+  appUrl: APP_URL
+  port: PORT
+  googleSheetsId: GOOGLE_SHEETS_ID
+  googleServiceAccountEmail: GOOGLE_SERVICE_ACCOUNT_EMAIL
+  googlePrivateKey: GOOGLE_PRIVATE_KEY

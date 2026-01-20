@@ -1,7 +1,5 @@
 import dotenv from 'dotenv';
-import fs from 'fs';
-import path from 'path';
-import yaml from 'js-yaml';
+import config from 'config';
 
 dotenv.config();
 
@@ -25,6 +23,8 @@ export interface AppConfig {
   runs: Run[];
   superusers: Superuser[];
   patrollers: string[];
+  enableLoginWithoutPassword: boolean;
+  disableMagicLink: boolean;
   env: {
     databaseUrl: string;
     sessionSecret: string;
@@ -42,34 +42,26 @@ export interface AppConfig {
 }
 
 function loadConfig(): AppConfig {
-  // Load config.yaml
-  const configPath = path.join(__dirname, '../../config.yaml');
-  const configFile = fs.readFileSync(configPath, 'utf8');
-  const configYaml = yaml.load(configFile) as {
-    runProvider: 'config' | 'sheets';
-    runs?: RunSection[];
-    superusers?: Array<{ email: string; name: string }>;
-    patrollers?: string[];
-  };
-
   // Transform runs from sections to flat array
   const runs: Run[] = [];
-  if (configYaml.runs) {
-    for (const section of configYaml.runs) {
-      for (const runName of section.runs) {
-        runs.push({
-          name: runName,
-          section: section.section,
-        });
-      }
+  const runSections = config.get<RunSection[]>('runs');
+  
+  for (const section of runSections) {
+    for (const runName of section.runs) {
+      runs.push({
+        name: runName,
+        section: section.section,
+      });
     }
   }
 
   return {
-    runProvider: process.env.RUN_PROVIDER as 'config' | 'sheets' || configYaml.runProvider || 'config',
+    runProvider: process.env.RUN_PROVIDER as 'config' | 'sheets' || config.get<'config' | 'sheets'>('runProvider'),
     runs,
-    superusers: configYaml.superusers || [],
-    patrollers: configYaml.patrollers || [],
+    superusers: config.get<Superuser[]>('superusers'),
+    patrollers: config.get<string[]>('patrollers'),
+    enableLoginWithoutPassword: config.get<boolean>('enableLoginWithoutPassword'),
+    disableMagicLink: config.get<boolean>('disableMagicLink'),
     env: {
       databaseUrl: process.env.DATABASE_URL || 'file:./dev.db',
       sessionSecret: process.env.SESSION_SECRET || 'change-this-secret',
@@ -87,4 +79,4 @@ function loadConfig(): AppConfig {
   };
 }
 
-export const config = loadConfig();
+export const appConfig = loadConfig();

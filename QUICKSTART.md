@@ -71,9 +71,11 @@ You should see:
 🚀 Server running on port 3000
 📧 Superusers: admin@bearvalley.com, patrol@bearvalley.com
 
-⚡ DEV MODE: Direct login available at POST /auth/dev-login
-   No magic links or email setup required!
+⚡ DEV: Password-less login enabled at POST /auth/dev-login
+⚡ DEV: Magic link emails disabled
 ```
+
+> **Note:** These dev features are controlled by `backend/config/development.yaml`. The app uses the [Node.js config package](https://www.npmjs.com/package/config) which automatically loads environment-specific overrides based on `NODE_ENV`.
 
 **Terminal 2 - Frontend:**
 ```bash

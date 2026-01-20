@@ -1,5 +1,6 @@
 # Bear Valley Run Checks - Example Configuration
-# Copy this to backend/config.yaml and customize for your environment
+# Copy this structure to backend/config/default.yaml
+# Uses the Node.js config package: https://www.npmjs.com/package/config
 
 # Run Provider: 'config' or 'sheets'
 # - 'config': Loads runs from this file (for development)
@@ -75,3 +76,15 @@ patrollers:
   - Bob Johnson (Non-App)
   - Alice Williams (Seasonal)
   - Charlie Brown (Volunteer)
+
+# Development Settings (optional)
+# These can be overridden in environment-specific config files like config/development.yaml
+# Enable password-less login endpoint at POST /auth/dev-login
+# Allows direct login without email verification (useful for local development)
+enableLoginWithoutPassword: false
+
+# Disable sending magic link emails
+# When true, login/user creation will return tokens directly in the response
+# Set to true in development if you don't have SMTP configured
+disableMagicLink: false
+

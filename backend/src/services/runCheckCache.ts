@@ -1,12 +1,12 @@
 import { RunCheck, loadTodayChecks, appendRunCheck as appendToSheet } from './googleSheets';
-import { config } from '../config/config';
+import { appConfig } from '../config/config';
 import { logger } from '../utils/logger';
 
 let cache: RunCheck[] = [];
 let lastRefresh: Date = new Date();
 
 export async function initialize(): Promise<void> {
-  if (config.runProvider === 'sheets' && process.env.NODE_ENV === 'production') {
+  if (appConfig.runProvider === 'sheets' && process.env.NODE_ENV === 'production') {
     cache = await loadTodayChecks();
     lastRefresh = new Date();
     logger.info(`Run check cache initialized with ${cache.length} checks from Google Sheets`);
@@ -32,7 +32,7 @@ export async function addCheck(check: Omit<RunCheck, 'id' | 'createdAt'>): Promi
   cache.push(newCheck);
 
   // Persist to Google Sheets if configured and in production
-  if (config.runProvider === 'sheets' && process.env.NODE_ENV === 'production') {
+  if (appConfig.runProvider === 'sheets' && process.env.NODE_ENV === 'production') {
     try {
       await appendToSheet(check);
     } catch (error) {
@@ -60,7 +60,7 @@ function scheduleMidnightReload(): void {
   setTimeout(async () => {
     logger.info('Midnight reload triggered');
     clearCache();
-    if (config.runProvider === 'sheets' && process.env.NODE_ENV === 'production') {
+    if (appConfig.runProvider === 'sheets' && process.env.NODE_ENV === 'production') {
       cache = await loadTodayChecks();
     }
     scheduleMidnightReload(); // Schedule next reload

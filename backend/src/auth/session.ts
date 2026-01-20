@@ -1,6 +1,6 @@
 import session from 'express-session';
 import createSqliteStore from 'connect-sqlite3';
-import { config } from '../config/config';
+import { appConfig } from '../config/config';
 
 const SQLiteStore = createSqliteStore(session);
 
@@ -10,7 +10,7 @@ export function createSessionMiddleware() {
       db: 'sessions.db',
       dir: './data',
     }) as any,
-    secret: config.env.sessionSecret,
+    secret: appConfig.env.sessionSecret,
     resave: false,
     saveUninitialized: false,
     cookie: {

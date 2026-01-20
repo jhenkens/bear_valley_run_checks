@@ -3,7 +3,7 @@ import cors from 'cors';
 import http from 'http';
 import path from 'path';
 import morgan from 'morgan';
-import { config } from './config/config';
+import { appConfig } from './config/config';
 import { createSessionMiddleware } from './auth/session';
 import { setupSocket } from './socket/runCheckSocket';
 import { createRunProvider } from './providers';
@@ -63,7 +63,7 @@ if (process.env.NODE_ENV === 'production') {
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', provider: config.runProvider });
+  res.json({ status: 'ok', provider: appConfig.runProvider });
 });
 
 // Initialize application
@@ -71,7 +71,7 @@ async function startServer() {
   try {
     logger.info('Starting Bear Valley Run Checks Backend...');
     logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
-    logger.info(`Run Provider: ${config.runProvider}`);
+    logger.info(`Run Provider: ${appConfig.runProvider}`);
 
     // Sync superusers from config.yaml to database
     await syncSuperusers();
@@ -82,10 +82,10 @@ async function startServer() {
 
     // Initialize Google Sheets only in production or when explicitly using sheets provider
     // In development, we skip Google Sheets to avoid external dependencies
-    if (config.runProvider === 'sheets' && process.env.NODE_ENV === 'production') {
+    if (appConfig.runProvider === 'sheets' && process.env.NODE_ENV === 'production') {
       await initializeGoogleSheets();
       logger.info('Google Sheets integration enabled');
-    } else if (config.runProvider === 'sheets') {
+    } else if (appConfig.runProvider === 'sheets') {
       logger.warn('Google Sheets provider configured but skipped in development mode');
       logger.warn('Run checks will be stored in memory only');
     }
@@ -94,14 +94,16 @@ async function startServer() {
     await initializeRunCheckCache();
 
     // Start server
-    const port = config.env.port;
+    const port = appConfig.env.port;
     server.listen(port, () => {
       logger.info(`🚀 Server running on port ${port}`);
-      logger.info(`📧 Superusers: ${config.superusers.map(su => su.email).join(', ')}`);
+      logger.info(`📧 Superusers: ${appConfig.superusers.map(su => su.email).join(', ')}`);
 
-      if (process.env.NODE_ENV !== 'production') {
-        logger.info('⚡ DEV MODE: Direct login available at POST /auth/dev-login');
-        logger.info('   No magic links or email setup required!');
+      if (appConfig.enableLoginWithoutPassword) {
+        logger.info('⚡ DEV: Password-less login enabled at POST /auth/dev-login');
+      }
+      if (appConfig.disableMagicLink) {
+        logger.info('⚡ DEV: Magic link emails disabled');
       }
     });
   } catch (error) {

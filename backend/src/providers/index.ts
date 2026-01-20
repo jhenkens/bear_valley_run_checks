@@ -1,16 +1,16 @@
 import { IRunProvider } from './runProvider';
 import { ConfigRunProvider } from './configRunProvider';
 import { SheetsRunProvider } from './sheetsRunProvider';
-import { config } from '../config/config';
+import { appConfig } from '../config/config';
 
 export function createRunProvider(): IRunProvider {
-  switch (config.runProvider) {
+  switch (appConfig.runProvider) {
     case 'config':
       return new ConfigRunProvider();
     case 'sheets':
       return new SheetsRunProvider();
     default:
-      throw new Error(`Unknown run provider: ${config.runProvider}`);
+      throw new Error(`Unknown run provider: ${appConfig.runProvider}`);
   }
 }
 

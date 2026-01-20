@@ -1,12 +1,12 @@
 import { IRunProvider } from './runProvider';
-import { Run, config } from '../config/config';
+import { Run, appConfig } from '../config/config';
 import { logger } from '../utils/logger';
 
 export class ConfigRunProvider implements IRunProvider {
   private runs: Run[];
 
   constructor() {
-    this.runs = config.runs;
+    this.runs = appConfig.runs;
   }
 
   async initialize(): Promise<void> {

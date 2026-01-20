@@ -1,0 +1,10 @@
+# Development environment overrides
+# This file overrides settings from default.yaml when NODE_ENV=development
+
+# Enable password-less login endpoint at POST /auth/dev-login
+# Allows direct login without email verification
+enableLoginWithoutPassword: true
+
+# Disable sending magic link emails
+# When true, login/user creation will return tokens directly in the response
+disableMagicLink: true

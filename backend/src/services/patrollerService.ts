@@ -1,5 +1,5 @@
 import { getPrismaClient } from '../config/database';
-import { config } from '../config/config';
+import { appConfig } from '../config/config';
 import { isSuperuser } from './superuserService';
 
 export async function getAllPatrollers(): Promise<string[]> {
@@ -9,7 +9,7 @@ export async function getAllPatrollers(): Promise<string[]> {
   });
 
   const userNames = users.map(u => u.name);
-  const configPatrollers = config.patrollers || [];
+  const configPatrollers = appConfig.patrollers || [];
 
   // Combine and deduplicate
   const allPatrollers = [...new Set([...userNames, ...configPatrollers])];

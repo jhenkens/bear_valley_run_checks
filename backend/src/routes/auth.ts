@@ -3,11 +3,12 @@ import { getPrismaClient } from '../config/database';
 import { generateMagicLink, validateToken } from '../auth/magicLink';
 import { sendMagicLink } from '../services/email';
 import { requireAuth, AuthRequest } from '../auth/middleware';
+import { appConfig } from '../config/config';
 
 const router = Router();
 
 // POST /auth/dev-login - DEV ONLY: Direct login without magic link
-if (process.env.NODE_ENV !== 'production') {
+if (appConfig.enableLoginWithoutPassword) {
   router.post('/dev-login', async (req, res) => {
     try {
       const { email } = req.body;
@@ -61,10 +62,26 @@ router.post('/login', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
+    // Generate magic link
     const token = await generateMagicLink(email.toLowerCase());
-    await sendMagicLink(email.toLowerCase(), token);
-
-    res.json({ message: 'Magic link sent to your email' });
+    
+    // Send magic link email unless disabled
+    if (!appConfig.disableMagicLink) {
+      try {
+        await sendMagicLink(email.toLowerCase(), token);
+        res.json({ message: 'Magic link sent to your email' });
+      } catch (emailError) {
+        console.error('Failed to send magic link email:', emailError);
+        res.status(500).json({ error: 'Failed to send email. Please contact an administrator.' });
+      }
+    } else {
+      // In dev mode with email disabled, return the token directly
+      res.json({ 
+        message: 'Magic link generated (email disabled in dev mode)',
+        token,
+        loginUrl: `${appConfig.env.appUrl}/auth/verify?token=${token}`
+      });
+    }
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Internal server error' });

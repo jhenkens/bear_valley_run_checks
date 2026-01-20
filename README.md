@@ -172,10 +172,33 @@ Key variables:
 
 ### Run Configuration
 
-Edit `backend/config.yaml` to configure:
+Configuration is managed using the [Node.js config package](https://www.npmjs.com/package/config). Files are located in `backend/config/`:
+
+- `default.yaml` - Base configuration
+- `development.yaml` - Development overrides  
+- `production.yaml` - Production overrides
+- `custom-environment-variables.yaml` - Environment variable mappings
+
+Configure:
 - Superusers (admins who can't be demoted)
 - Patrollers without accounts
 - Run list (when using config provider)
+- Development flags (see below)
+
+### Environment-Specific Configuration
+
+The config package automatically loads environment-specific files based on `NODE_ENV`. Settings merge in order:
+1. `default.yaml` (base config)
+2. `{NODE_ENV}.yaml` (environment overrides)
+3. Environment variables (mapped in `custom-environment-variables.yaml`)
+
+**Development Flags:**
+```yaml
+enableLoginWithoutPassword: true  # Enable POST /auth/dev-login endpoint
+disableMagicLink: true             # Skip sending emails, return tokens in response
+```
+
+These flags are useful for local development without SMTP configuration.
 
 ## Run Providers
 
