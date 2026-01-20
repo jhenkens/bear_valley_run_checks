@@ -17,6 +17,8 @@ export function createApp() {
     cart: [] as any[],
     loginEmail: '',
     loginMessage: '',
+    isLoggingIn: false,
+    isSubmitting: false,
     showConfirm: false,
     confirmPatroller: '',
     confirmTime: '',
@@ -142,7 +144,10 @@ export function createApp() {
 
     // Auth
     async devLogin() {
+      if (this.isLoggingIn) return;
+      
       try {
+        this.isLoggingIn = true;
         this.error = null;
         this.loginMessage = '';
         await api.devLogin(this.loginEmail);
@@ -150,11 +155,15 @@ export function createApp() {
         window.location.reload();
       } catch (err: any) {
         this.error = err.message || 'Login failed';
+        this.isLoggingIn = false;
       }
     },
 
     async login() {
+      if (this.isLoggingIn) return;
+      
       try {
+        this.isLoggingIn = true;
         this.error = null;
         this.loginMessage = '';
         await api.login(this.loginEmail);
@@ -162,6 +171,8 @@ export function createApp() {
         this.loginEmail = '';
       } catch (err: any) {
         this.error = err.message || 'Login failed';
+      } finally {
+        this.isLoggingIn = false;
       }
     },
 
@@ -214,7 +225,10 @@ export function createApp() {
     },
 
     async submitChecks() {
+      if (this.isSubmitting) return;
+      
       try {
+        this.isSubmitting = true;
         this.error = null;
 
         // No blocking - we allow submissions even if Drive is disconnected
@@ -222,11 +236,13 @@ export function createApp() {
 
         if (!this.confirmPatroller) {
           this.error = 'Please select a patroller';
+          this.isSubmitting = false;
           return;
         }
 
         if (!this.confirmTime) {
           this.error = 'Please select a time';
+          this.isSubmitting = false;
           return;
         }
 
@@ -267,6 +283,8 @@ export function createApp() {
         await this.loadData();
       } catch (err: any) {
         this.error = err.message || 'Failed to submit checks';
+      } finally {
+        this.isSubmitting = false;
       }
     },
 

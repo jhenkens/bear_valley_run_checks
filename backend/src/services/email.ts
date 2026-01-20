@@ -15,7 +15,7 @@ export async function sendMagicLink(email: string, token: string): Promise<void>
   const magicLink = `${appConfig.appUrl}/auth/verify?token=${token}`;
 
   await transporter.sendMail({
-    from: appConfig.emailFrom,
+    from: `Bear Valley Run Checks <${appConfig.emailFrom}>`,
     to: email,
     subject: 'Login to Bear Valley Run Checks',
     html: `
@@ -34,7 +34,7 @@ export async function sendWelcomeEmail(email: string, token: string): Promise<vo
   const magicLink = `${appConfig.appUrl}/auth/verify?token=${token}`;
 
   await transporter.sendMail({
-    from: appConfig.emailFrom,
+    from: `Bear Valley Run Checks <${appConfig.emailFrom}>`,
     to: email,
     subject: 'Welcome to Bear Valley Run Checks',
     html: `

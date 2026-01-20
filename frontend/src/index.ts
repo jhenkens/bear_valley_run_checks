@@ -31,12 +31,12 @@ if (appRoot) {
           <input type="email" x-model="loginEmail" @keyup.enter="isDev ? devLogin() : login()" placeholder="your@email.com">
         </div>
 
-        <button x-show="isDev" class="btn" @click="devLogin" :disabled="!loginEmail" style="background: #28a745;">
-          Login (DEV - No Email)
+        <button x-show="isDev" class="btn" @click="devLogin" :disabled="!loginEmail || isLoggingIn" style="background: #28a745;">
+          <span x-text="isLoggingIn ? 'Logging in...' : 'Login (DEV - No Email)'"></span>
         </button>
 
-        <button x-show="!isDev" class="btn" @click="login" :disabled="!loginEmail">
-          Send Login Link
+        <button x-show="!isDev" class="btn" @click="login" :disabled="!loginEmail || isLoggingIn">
+          <span x-text="isLoggingIn ? 'Sending...' : 'Send Login Link'"></span>
         </button>
 
         <div x-show="loginMessage" class="message success" x-text="loginMessage" style="margin-top: 1rem;"></div>
@@ -122,8 +122,10 @@ if (appRoot) {
                 <small style="color: #666; font-size: 0.85em; display: block; margin-top: 0.25rem;" x-text="'Today, Timezone: ' + timezone"></small>
               </div>
 
-              <button class="btn btn-success" @click="submitChecks">Submit</button>
-              <button class="btn" @click="clearCart" style="margin-top: 0.5rem;">Cancel</button>
+              <button class="btn btn-success" @click="submitChecks" :disabled="isSubmitting">
+                <span x-text="isSubmitting ? 'Submitting...' : 'Submit'"></span>
+              </button>
+              <button class="btn" @click="clearCart" style="margin-top: 0.5rem;" :disabled="isSubmitting">Cancel</button>
 
               <div x-show="error" class="message error" x-text="error" style="margin-top: 1rem;"></div>
             </div>
