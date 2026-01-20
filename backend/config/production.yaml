@@ -1,0 +1,12 @@
+# Production configuration
+# Environment variables will override these via custom-environment-variables.yaml
+
+# Production uses sheets provider by default (can be overridden by RUN_PROVIDER env var)
+runProvider: sheets
+
+# Development flags should be disabled in production
+enableLoginWithoutPassword: false
+disableMagicLink: false
+
+# Timezone for all date/time operations
+timezone: America/Los_Angeles
