@@ -122,6 +122,61 @@
 
 ---
 
+## 2026-01-19 - Configuration & Flexibility Enhancements
+
+### Architecture Decisions
+
+**Run Provider Pattern**
+- **Why:** Separate development (config.yaml) from production (Google Sheets)
+- **Benefits:**
+  - Faster development without Google Sheets setup
+  - Easy testing with fixture data
+  - Production flexibility to manage runs in spreadsheet
+  - Clean abstraction via provider interface
+- **Implementation:**
+  - `IRunProvider` interface
+  - `ConfigRunProvider` reads from config.yaml
+  - `SheetsRunProvider` reads from Google Sheets template
+  - Environment variable switches between providers
+- **Trade-offs:** Slightly more code, but much better developer experience and flexibility
+
+**Superuser Protection**
+- **Why:** Prevent accidental lockout or removal of critical admin accounts
+- **Use Case:** Mountain managers who need permanent admin access
+- **Implementation:**
+  - List of superuser emails in config.yaml
+  - Backend checks superuser status before allowing admin toggle/delete
+  - Frontend disables controls for superusers with tooltip
+- **Trade-offs:** Adds configuration complexity, but critical for operational safety
+
+**Non-App Patrollers in Config**
+- **Why:** Some patrollers don't use the app (seasonal workers, volunteers)
+- **Use Case:** Experienced patrollers can log checks on behalf of non-app users
+- **Implementation:**
+  - List of names in config.yaml
+  - Combined with app users for patroller dropdown
+  - No authentication tied to these names
+- **Trade-offs:** No audit trail linking to specific accounts, but reflects real-world workflow
+
+### UI/UX Decisions
+
+**Searchable Autocomplete for Patroller Selection**
+- **Why:** 100 patrollers is too many for simple dropdown on mobile
+- **Rationale:**
+  - Faster selection (type first few letters)
+  - Better mobile UX than scrolling long list
+  - Matches on start of any word ("joh" finds both "John Doe" and "Bob Johnson")
+- **Implementation:**
+  - Client-side filtering (100 names is small dataset)
+  - Case-insensitive matching
+  - Show filtered results in dropdown below input
+- **Alternatives considered:**
+  - Simple dropdown (too slow to scroll)
+  - Radio button list (too much screen space)
+- **Trade-offs:** Slightly more complex component, but significantly better UX
+
+---
+
 ## Open Questions
 
 ### To Be Decided

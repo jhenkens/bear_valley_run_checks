@@ -7,19 +7,25 @@
 ### Data Model
 - **Run Check:** Run Name, Check Time, Patroller Name
 - **Run:** Name, Section (5 sections total, ~100 runs)
-- **User:** Email, Name, Admin Status
+- **User:** Email, Name, Admin Status, Is Superuser (from config)
+- **Patroller Names:** App users + non-app patrollers (from config)
 
 ### Authentication
 - Email-only magic link authentication
 - No passwords
 - Session management
 - Admin role for user management
+- Superuser protection (defined in config.yaml, cannot be demoted or deleted)
 
 ### Run Check Recording
 - Tap runs to add to cart
 - Batch submit multiple runs
 - Default: current time, current user
 - Editable: time (up to +15 min future), patroller
+- Patroller selection: Searchable autocomplete input
+  - Case-insensitive
+  - Matches on start of any word in name
+  - Includes app users + non-app patrollers (from config)
 - Real-time sync across all connected clients
 
 ### UI Views
@@ -43,15 +49,17 @@
 - Display: run name, section, check time
 
 #### 4. Admin Panel (Admins only)
-- List all users
+- List all users (with superuser indicator)
 - Add new user (email, name) → sends welcome magic link
-- Delete user
-- Toggle admin status
+- Delete user (disabled for superusers)
+- Toggle admin status (disabled for superusers)
 
 ### Data Storage
 - **Users & Sessions:** SQLite + Prisma
 - **Run Checks:** Google Sheets (one sheet per day)
-- **Runs:** Google Sheets template (read once on startup)
+- **Runs:** Pluggable provider (config.yaml for dev, Google Sheets for prod)
+- **Non-App Patrollers:** config.yaml
+- **Superusers:** config.yaml
 - **Performance:** In-memory cache for today's checks
 
 ### Technical Constraints
@@ -75,7 +83,7 @@
 - ❌ Historical data beyond current day (access via Google Sheets)
 - ❌ Additional run check data (conditions, hazards, etc.)
 - ❌ Edit/delete submitted run checks
-- ❌ Run management in-app (managed via Google Sheets template)
+- ❌ Run management in-app (managed via config.yaml or Google Sheets template)
 
 ---
 
@@ -95,10 +103,10 @@
 
 ### Admin User Management Flow
 1. Navigate to Admin tab
-2. View user list
+2. View user list (superusers marked with indicator)
 3. Add user: enter email/name → user created, welcome email sent
-4. Delete user: click delete → confirm → user removed
-5. Toggle admin: click checkbox → status updated
+4. Delete user: click delete → confirm → user removed (disabled for superusers)
+5. Toggle admin: click checkbox → status updated (disabled for superusers)
 
 ---
 

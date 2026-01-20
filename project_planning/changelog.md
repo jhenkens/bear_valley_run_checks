@@ -25,6 +25,55 @@ Track all changes to project planning documents.
 
 ---
 
+## 2026-01-19 (Later) - Configuration & Flexibility Updates
+
+### Added
+1. **Run Provider Pattern**
+   - Abstract `IRunProvider` interface for pluggable run data sources
+   - `ConfigRunProvider` - loads runs from config.yaml (for development)
+   - `SheetsRunProvider` - loads runs from Google Sheets (for production)
+   - Environment variable `RUN_PROVIDER` to switch between providers
+
+2. **Superuser Protection**
+   - `superusers` array in config.yaml
+   - Superusers cannot have admin status removed
+   - Superusers cannot be deleted
+   - UI shows superuser indicator and disables controls
+
+3. **Non-App Patrollers**
+   - `patrollers` array in config.yaml
+   - Names for patrollers who don't use the app
+   - Included in patroller autocomplete alongside app users
+
+4. **Searchable Patroller Autocomplete**
+   - Replaced simple dropdown with searchable autocomplete input
+   - Case-insensitive matching
+   - Matches on start of any word in name
+   - Client-side filtering for performance
+
+5. **New API Endpoint**
+   - `GET /api/patrollers` - returns all patroller names (users + config)
+
+### Changed
+- Updated project structure to include `providers/` directory
+- Modified `GET /api/users` to include `isSuperuser` flag
+- Updated `PATCH /api/users/:id/admin` to reject superuser demotion (403)
+- Enhanced admin panel UI to show superuser status
+- Updated environment variables to include `RUN_PROVIDER` and `CONFIG_PATH`
+
+### Rationale
+- **Run Provider:** Enables faster development without Google Sheets setup, cleaner separation of concerns
+- **Superusers:** Prevents accidental lockout of critical admin accounts
+- **Non-App Patrollers:** Reflects real-world usage where some patrollers don't have accounts
+- **Searchable Autocomplete:** Better UX for selecting from 100+ patrollers on mobile
+
+### Impact
+- **Files Added:** `providers/runProvider.ts`, `providers/configRunProvider.ts`, `providers/sheetsRunProvider.ts`, `config.yaml`
+- **Files Modified:** API routes, admin panel component, confirm page component
+- **Configuration:** New config.yaml required for development
+
+---
+
 ## Template for Future Entries
 
 ```markdown

@@ -45,15 +45,21 @@ bear-valley-run-checks/
 │   │   ├── routes/
 │   │   │   ├── auth.ts              # Login/logout routes
 │   │   │   ├── runchecks.ts         # Run check CRUD
-│   │   │   └── users.ts             # User management (admin)
+│   │   │   ├── users.ts             # User management (admin)
+│   │   │   └── patrollers.ts        # Get patroller names
 │   │   ├── services/
-│   │   │   ├── googleSheets.ts      # Sheets API integration
+│   │   │   ├── googleSheets.ts      # Sheets API integration (provider)
 │   │   │   ├── email.ts             # Nodemailer + SMTP2go
 │   │   │   └── runCheckCache.ts     # In-memory cache for today's checks
+│   │   ├── providers/
+│   │   │   ├── runProvider.ts       # Abstract run provider interface
+│   │   │   ├── configRunProvider.ts # config.yaml provider
+│   │   │   └── sheetsRunProvider.ts # Google Sheets provider
 │   │   ├── socket/
 │   │   │   └── runCheckSocket.ts    # Socket.io handlers
 │   │   └── prisma/
 │   │       └── schema.prisma        # Database schema
+│   ├── config.yaml                  # Dev configuration
 │   ├── package.json
 │   └── tsconfig.json
 ├── frontend/
@@ -117,6 +123,43 @@ model Session {
 
 ---
 
+## Configuration (config.yaml)
+
+Development configuration file for runs, superusers, and non-app patrollers.
+
+```yaml
+# Run provider configuration
+runProvider: config  # 'config' or 'sheets'
+
+# Runs (when runProvider = 'config')
+runs:
+  - name: Cub
+    section: Bear Cub
+  - name: Grizzly
+    section: Bear Cub
+  - name: Kodiak
+    section: Lower Mountain
+  # ... more runs
+
+# Superusers (cannot be removed as admins)
+superusers:
+  - admin@bearvalley.com
+  - supervisor@bearvalley.com
+
+# Non-app patrollers (for others to log checks on behalf of)
+patrollers:
+  - John Doe (Non-App)
+  - Jane Smith (Non-App)
+  - Bob Johnson (Non-App)
+```
+
+**Usage:**
+- `runProvider`: Switch between config and Google Sheets for run data
+- `superusers`: Email addresses that cannot have admin status removed
+- `patrollers`: Names that appear in patroller dropdown but don't have app accounts
+
+---
+
 ## Google Sheets Structure
 
 ### Template Sheet
@@ -164,10 +207,35 @@ Cub      | Bear Cub| 2026-01-19 09:15:00 | John Doe
 - `requireAuth` - Ensures user is logged in
 - `requireAdmin` - Ensures user is admin
 
-### 2. Google Sheets Service
+### 2. Run Provider Pattern
+
+**Abstract Provider Interface:**
+```typescript
+interface IRunProvider {
+  initialize(): Promise<void>
+  getRuns(): Run[]
+}
+```
+
+**Implementations:**
+
+**ConfigRunProvider** (for development):
+- Loads runs from `config.yaml`
+- Simple, fast, no external dependencies
+
+**SheetsRunProvider** (for production):
+- Loads runs from Google Sheets template
+- Allows non-technical users to manage run list
+
+**Configuration:**
+Specify provider in environment:
+```bash
+RUN_PROVIDER=config  # or 'sheets'
+```
+
+### 3. Google Sheets Service
 
 **Responsibilities:**
-- Load template sheet on startup → cache runs in memory
 - Check if daily sheet exists, create if needed
 - Parse daily sheet on startup → populate cache
 - Append new run checks to daily sheet
@@ -177,13 +245,14 @@ Cub      | Bear Cub| 2026-01-19 09:15:00 | John Doe
 ```typescript
 class GoogleSheetsService {
   async initialize(): Promise<void>
-  getRuns(): Run[]  // From template
   async getTodayChecks(): Promise<RunCheck[]>  // From cache
   async addRunCheck(check: RunCheck): Promise<void>  // Append to sheet + cache
 }
 ```
 
-### 3. In-Memory Cache
+**Note:** Run list loading now handled by separate run provider.
+
+### 4. In-Memory Cache
 
 ```typescript
 interface Run {
@@ -207,26 +276,48 @@ class RunCheckCache {
 }
 ```
 
-### 4. API Routes
+### 5. Patroller Names Service
+
+**Responsibilities:**
+- Combine app users + config-based patrollers
+- Provide full list for autocomplete
+
+**Sources:**
+1. All users from database (User table)
+2. Non-app patrollers from `config.yaml`
+
+**Interface:**
+```typescript
+class PatrollerService {
+  getPatrollerNames(): string[]  // Returns sorted array of all patroller names
+}
+```
+
+### 6. API Routes
 
 **Run Checks:**
-- `GET /api/runs` - Get all runs from template
+- `GET /api/runs` - Get all runs from run provider
 - `GET /api/runchecks/today` - Get today's checks (from cache)
 - `POST /api/runchecks` - Submit run check(s)
   - Body: `{ checks: [{ runName, checkTime, patroller }] }`
   - Validates: checkTime within [-now, +15min]
   - Appends to sheet, updates cache, emits socket event
 
+**Patrollers:**
+- `GET /api/patrollers` - Get all patroller names (app users + config patrollers)
+
 **User Management (Admin only):**
-- `GET /api/users` - List all users
+- `GET /api/users` - List all users (includes `isSuperuser` flag)
 - `POST /api/users` - Create user
   - Body: `{ email, name }`
   - Sends welcome magic link
 - `DELETE /api/users/:id` - Delete user
 - `PATCH /api/users/:id/admin` - Toggle admin status
   - Body: `{ isAdmin: boolean }`
+  - Validates: Cannot remove admin from superusers
+  - Returns 403 if attempting to demote superuser
 
-### 5. Socket.io Events
+### 7. Socket.io Events
 
 **Server → All Clients:**
 ```typescript
@@ -240,7 +331,7 @@ socket.emit('runcheck:new', {
 
 Clients listen for this event and update their UI in real-time.
 
-### 6. Email Service
+### 8. Email Service
 
 **Templates:**
 - Magic link email: "Click here to log in to Bear Valley Run Checks: [link]"
@@ -307,10 +398,25 @@ Clients listen for this event and update their UI in real-time.
 **Features:**
 - Lists all selected runs
 - Form fields:
-  - Patroller: Dropdown (all users), default to current user
-  - Check Time: Time picker, default to "now", range: [now, +15min]
+  - **Patroller:** Searchable autocomplete input
+    - Type to filter patroller names (case-insensitive)
+    - Matches on the start of any word in the name
+    - Example: "joh" matches "John Doe" and "Bob Johnson"
+    - Includes both app users and config-based patrollers
+    - Default to current user
+  - **Check Time:** Time picker, default to "now", range: [now, +15min]
 - Submit button → POST to `/api/runchecks`
 - Success → Clear cart, return to Run Checks tab, show toast
+
+**Autocomplete Implementation:**
+```typescript
+function filterPatrollers(query: string, patrollers: string[]): string[] {
+  const lower = query.toLowerCase();
+  return patrollers.filter(name =>
+    name.toLowerCase().split(' ').some(word => word.startsWith(lower))
+  );
+}
+```
 
 ### 3. History by Section Tab
 
@@ -338,14 +444,18 @@ Clients listen for this event and update their UI in real-time.
 - User list table:
   - Email
   - Name
-  - Admin status (checkbox)
-  - Delete button
+  - Admin status (checkbox, disabled for superusers)
+  - Delete button (disabled for superusers)
+  - Superuser indicator (badge/icon)
 - "Add User" button → Modal:
   - Email input
   - Name input
   - Submit → POST `/api/users`
 - Toggle admin checkbox → PATCH `/api/users/:id/admin`
+  - Disabled for superusers (defined in config.yaml)
+  - Shows tooltip: "Superusers cannot be demoted"
 - Delete button → Confirm dialog → DELETE `/api/users/:id`
+  - Disabled for superusers
 
 ---
 
@@ -419,8 +529,12 @@ SMTP2GO_SENDER=noreply@bearvalley.com
 
 # Google Sheets
 GOOGLE_SHEETS_CREDENTIALS=./credentials.json
-TEMPLATE_SHEET_ID=<google-sheet-id>
+TEMPLATE_SHEET_ID=<google-sheet-id>  # Only needed if RUN_PROVIDER=sheets
 STORAGE_FOLDER_ID=<google-drive-folder-id>  # Where daily sheets are created
+
+# Run Provider
+RUN_PROVIDER=config  # 'config' or 'sheets'
+CONFIG_PATH=./config.yaml  # Path to config.yaml
 
 # App
 APP_URL=https://runchecks.bearvalley.com
@@ -491,6 +605,7 @@ NODE_ENV=production
 - ✅ Edit time (up to +15 min future) and patroller
 - ✅ Real-time updates via Socket.io
 - ✅ Cart system for batch check submissions
+- ✅ Searchable autocomplete for patroller selection
 
 ### UI Features
 - ✅ Color-coded runs (red/yellow/green) based on last check
@@ -501,12 +616,15 @@ NODE_ENV=production
 ### Admin Features
 - ✅ User management (CRUD)
 - ✅ Admin role management
+- ✅ Superuser protection (cannot be demoted/deleted)
 - ✅ Send welcome emails to new users
 
 ### Data Management
 - ✅ Google Sheets storage (one sheet per day)
 - ✅ In-memory cache for performance
-- ✅ Template sheet defines runs
+- ✅ Pluggable run provider (config.yaml or Google Sheets)
+- ✅ Non-app patroller names (for proxy logging)
+- ✅ Config-based superusers
 
 ---
 

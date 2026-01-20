@@ -1,0 +1,77 @@
+# Bear Valley Run Checks - Example Configuration
+# Copy this to backend/config.yaml and customize for your environment
+
+# Run Provider: 'config' or 'sheets'
+# - 'config': Loads runs from this file (for development)
+# - 'sheets': Loads runs from Google Sheets template (for production)
+runProvider: config
+
+# Runs configuration (only used when runProvider = 'config')
+# Format: name + section
+runs:
+  # Bear Cub Section
+  - name: Cub
+    section: Bear Cub
+  - name: Grizzly
+    section: Bear Cub
+  - name: Kodiak
+    section: Bear Cub
+  - name: Polar Bear
+    section: Bear Cub
+
+  # Lower Mountain Section
+  - name: Exhibition
+    section: Lower Mountain
+  - name: Lower Alley
+    section: Lower Mountain
+  - name: Easy Street
+    section: Lower Mountain
+  - name: Mokelumne
+    section: Lower Mountain
+
+  # Mid Mountain Section
+  - name: Upper Alley
+    section: Mid Mountain
+  - name: Calaveras
+    section: Mid Mountain
+  - name: Stanislaus
+    section: Mid Mountain
+  - name: Tuolumne
+    section: Mid Mountain
+
+  # Upper Mountain Section
+  - name: Upper Exhibition
+    section: Upper Mountain
+  - name: Shasta
+    section: Upper Mountain
+  - name: Whitney
+    section: Upper Mountain
+  - name: Lassen
+    section: Upper Mountain
+
+  # Backcountry Section
+  - name: Outpost
+    section: Backcountry
+  - name: Skyline
+    section: Backcountry
+  - name: North Face
+    section: Backcountry
+  - name: East Ridge
+    section: Backcountry
+
+# Superusers: Email addresses that cannot be demoted or deleted
+# These users will always have admin privileges
+superusers:
+  - admin@bearvalley.com
+  - supervisor@bearvalley.com
+  - patroller-director@bearvalley.com
+
+# Non-App Patrollers: Names of patrollers who don't have app accounts
+# These names will appear in the patroller autocomplete so others can log checks on their behalf
+# Useful for seasonal workers, volunteers, or patrollers who prefer not to use the app
+patrollers:
+  - John Doe (Seasonal)
+  - Jane Smith (Volunteer)
+  - Bob Johnson (Non-App)
+  - Alice Williams (Seasonal)
+  - Charlie Brown (Volunteer)
