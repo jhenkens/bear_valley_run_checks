@@ -29,6 +29,15 @@ export async function initializeGoogleSheets(): Promise<void> {
   }
 
   if (!appConfig.env.googleSheetsId || !appConfig.env.googleDriveFolderId || !appConfig.env.googleServiceAccountEmail || !appConfig.env.googlePrivateKey) {
+    logger.error('Google Sheets/Drive credentials not configured:', {
+      hasGoogleSheetsId: !!appConfig.env.googleSheetsId,
+      googleSheetsId: appConfig.env.googleSheetsId || 'NOT SET',
+      hasGoogleDriveFolderId: !!appConfig.env.googleDriveFolderId,
+      googleDriveFolderId: appConfig.env.googleDriveFolderId || 'NOT SET',
+      hasGoogleServiceAccountEmail: !!appConfig.env.googleServiceAccountEmail,
+      googleServiceAccountEmail: appConfig.env.googleServiceAccountEmail || 'NOT SET',
+      hasGooglePrivateKey: !!appConfig.env.googlePrivateKey,
+    });
     throw new Error('Google Sheets/Drive credentials not configured');
   }
 
