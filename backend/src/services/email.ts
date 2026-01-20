@@ -2,20 +2,20 @@ import nodemailer from 'nodemailer';
 import { appConfig } from '../config/config';
 
 const transporter = nodemailer.createTransport({
-  host: appConfig.env.smtpHost,
-  port: appConfig.env.smtpPort,
-  secure: appConfig.env.smtpPort === 465,
+  host: appConfig.smtpHost,
+  port: appConfig.smtpPort,
+  secure: appConfig.smtpPort === 465,
   auth: {
-    user: appConfig.env.smtpUser,
-    pass: appConfig.env.smtpPass,
+    user: appConfig.smtpUser,
+    pass: appConfig.smtpPass,
   },
 });
 
 export async function sendMagicLink(email: string, token: string): Promise<void> {
-  const magicLink = `${appConfig.env.appUrl}/auth/verify?token=${token}`;
+  const magicLink = `${appConfig.appUrl}/auth/verify?token=${token}`;
 
   await transporter.sendMail({
-    from: appConfig.env.emailFrom,
+    from: appConfig.emailFrom,
     to: email,
     subject: 'Login to Bear Valley Run Checks',
     html: `
@@ -31,10 +31,10 @@ export async function sendMagicLink(email: string, token: string): Promise<void>
 }
 
 export async function sendWelcomeEmail(email: string, token: string): Promise<void> {
-  const magicLink = `${appConfig.env.appUrl}/auth/verify?token=${token}`;
+  const magicLink = `${appConfig.appUrl}/auth/verify?token=${token}`;
 
   await transporter.sendMail({
-    from: appConfig.env.emailFrom,
+    from: appConfig.emailFrom,
     to: email,
     subject: 'Welcome to Bear Valley Run Checks',
     html: `

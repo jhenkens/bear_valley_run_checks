@@ -80,7 +80,7 @@ router.post('/login', async (req, res) => {
       res.json({ 
         message: 'Magic link generated (email disabled in dev mode)',
         token,
-        loginUrl: `${appConfig.env.appUrl}/auth/verify?token=${token}`
+        loginUrl: `${appConfig.appUrl}/auth/verify?token=${token}`
       });
     }
   } catch (error) {

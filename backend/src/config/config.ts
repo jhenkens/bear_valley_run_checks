@@ -1,7 +1,4 @@
-import dotenv from 'dotenv';
 import config from 'config';
-
-dotenv.config();
 
 export interface Run {
   name: string;
@@ -26,28 +23,26 @@ export interface AppConfig {
   enableLoginWithoutPassword: boolean;
   disableMagicLink: boolean;
   timezone: string;
-  env: {
-    databaseUrl: string;
-    sessionSecret: string;
-    smtpHost: string;
-    smtpPort: number;
-    smtpUser: string;
-    smtpPass: string;
-    emailFrom: string;
-    appUrl: string;
-    port: number;
-    googleSheetsId?: string;
-    googleDriveFolderId?: string;
-    googleServiceAccountEmail?: string;
-    googlePrivateKey?: string;
-  };
+  databaseUrl: string;
+  sessionSecret: string;
+  smtpHost: string;
+  smtpPort: number;
+  smtpUser: string;
+  smtpPass: string;
+  emailFrom: string;
+  appUrl: string;
+  port: number;
+  googleSheetsId?: string;
+  googleDriveFolderId?: string;
+  googleServiceAccountEmail?: string;
+  googlePrivateKey?: string;
 }
 
 function loadConfig(): AppConfig {
   // Transform runs from sections to flat array
-  const runs: Run[] = [];
   const runSections = config.get<RunSection[]>('runs');
-  
+  const runs: Run[] = [];
+
   for (const section of runSections) {
     for (const runName of section.runs) {
       runs.push({
@@ -58,27 +53,26 @@ function loadConfig(): AppConfig {
   }
 
   return {
-    runProvider: process.env.RUN_PROVIDER as 'config' | 'sheets' || config.get<'config' | 'sheets'>('runProvider'),
+    runProvider: config.get<'config' | 'sheets'>('runProvider'),
     runs,
     superusers: config.get<Superuser[]>('superusers'),
     patrollers: config.get<string[]>('patrollers'),
     enableLoginWithoutPassword: config.get<boolean>('enableLoginWithoutPassword'),
     disableMagicLink: config.get<boolean>('disableMagicLink'),
     timezone: config.get<string>('timezone'),
-    env: {
-      databaseUrl: process.env.DATABASE_URL || 'file:./dev.db',
-      sessionSecret: process.env.SESSION_SECRET || 'change-this-secret',
-      smtpHost: process.env.SMTP_HOST || 'localhost',
-      smtpPort: parseInt(process.env.SMTP_PORT || '587', 10),
-      smtpUser: process.env.SMTP_USER || '',
-      smtpPass: process.env.SMTP_PASS || '',
-      emailFrom: process.env.EMAIL_FROM || 'noreply@example.com',
-      appUrl: process.env.APP_URL || 'http://localhost:3000',
-      port: parseInt(process.env.PORT || '3000', 10),
-      googleSheetsId: process.env.GOOGLE_SHEETS_ID,
-      googleServiceAccountEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-      googlePrivateKey: process.env.GOOGLE_PRIVATE_KEY,
-    },
+    databaseUrl: config.get<string>('databaseUrl'),
+    sessionSecret: config.get<string>('sessionSecret'),
+    smtpHost: config.get<string>('smtpHost'),
+    smtpPort: config.get<number>('smtpPort'),
+    smtpUser: config.get<string>('smtpUser'),
+    smtpPass: config.get<string>('smtpPass'),
+    emailFrom: config.get<string>('emailFrom'),
+    appUrl: config.get<string>('appUrl'),
+    port: config.get<number>('port'),
+    googleSheetsId: config.has('googleSheetsId') ? config.get<string>('googleSheetsId') : undefined,
+    googleDriveFolderId: config.has('googleDriveFolderId') ? config.get<string>('googleDriveFolderId') : undefined,
+    googleServiceAccountEmail: config.has('googleServiceAccountEmail') ? config.get<string>('googleServiceAccountEmail') : undefined,
+    googlePrivateKey: config.has('googlePrivateKey') ? config.get<string>('googlePrivateKey') : undefined,
   };
 }
 

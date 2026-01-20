@@ -92,7 +92,7 @@ async function startServer() {
     await initializeRunCheckCache();
 
     // Start server
-    const port = appConfig.env.port;
+    const port = appConfig.port;
     server.listen(port, () => {
       logger.info(`🚀 Server running on port ${port}`);
       logger.info(`📧 Superusers: ${appConfig.superusers.map(su => su.email).join(', ')}`);

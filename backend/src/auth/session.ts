@@ -10,7 +10,7 @@ export function createSessionMiddleware() {
       db: 'sessions.db',
       dir: './data',
     }) as any,
-    secret: appConfig.env.sessionSecret,
+    secret: appConfig.sessionSecret,
     resave: false,
     saveUninitialized: false,
     cookie: {
