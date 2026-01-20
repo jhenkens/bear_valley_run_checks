@@ -33,13 +33,17 @@ RUN apk add --no-cache openssl
 
 WORKDIR /app
 
-# Install production dependencies
+# Install ALL dependencies first (including prisma CLI for migrations)
 COPY backend/package*.json ./
-RUN npm install --production
+RUN npm install
 
 # Copy built backend
 COPY --from=backend-builder /app/backend/dist ./dist
-COPY --from=backend-builder /app/backend/prisma ./prisma
+
+# Copy Prisma schema and migrations
+COPY backend/prisma ./prisma
+
+# Copy generated Prisma client from builder
 COPY --from=backend-builder /app/backend/node_modules/.prisma ./node_modules/.prisma
 COPY --from=backend-builder /app/backend/node_modules/@prisma ./node_modules/@prisma
 

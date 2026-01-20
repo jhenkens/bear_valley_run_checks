@@ -31,7 +31,7 @@ Thumbs.db
 
 # Prisma
 .prisma/
-migrations/
+# Note: migrations/ should be tracked in git for production deployment
 
 # Temporary
 *.tmp

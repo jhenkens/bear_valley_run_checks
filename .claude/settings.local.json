@@ -11,7 +11,9 @@
       "Bash(git checkout:*)",
       "Bash(sqlite3:*)",
       "Bash(timeout 5 npm run dev:*)",
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }
