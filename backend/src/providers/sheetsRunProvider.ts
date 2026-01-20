@@ -4,9 +4,19 @@ import { logger } from '../utils/logger';
 import { getAuthenticatedSheetsClient } from '../services/googleOAuth';
 
 export class SheetsRunProvider implements IRunProvider {
+  private initialized: boolean = false;
   private runs: Run[] = [];
 
   async initialize(): Promise<void> {
+    if (this.initialized) {
+        return;
+    }
+    
+    await this._do_initialize();
+    this.initialized = true;
+  }
+
+  private async _do_initialize(): Promise<void> {
     // In development mode, return empty runs array
     if (process.env.NODE_ENV !== 'production') {
       logger.info('SheetsRunProvider initialized (skipped in development)');

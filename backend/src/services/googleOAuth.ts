@@ -20,10 +20,25 @@ function getOAuth2Client() {
 
 /**
  * Get active OAuth configuration from database
+ * Only returns OAuth records that are currently active
  */
 export async function getActiveOAuth() {
   return await prisma.googleOAuth.findFirst({
     where: { isActive: true },
+    include: {
+      user: {
+        select: { id: true, email: true, name: true },
+      },
+    },
+  });
+}
+
+/**
+ * Get the latest OAuth configuration from database (active or inactive)
+ * Used for status checking, display, and attempting reactivation
+ */
+export async function getLatestOAuth() {
+  return await prisma.googleOAuth.findFirst({
     include: {
       user: {
         select: { id: true, email: true, name: true },
@@ -118,16 +133,18 @@ export async function testOAuthToken(accessToken: string): Promise<boolean> {
 
 /**
  * Get configured and authenticated Google Sheets API client
+ * Attempts to use OAuth even if marked inactive - will reactivate if successful
  */
 export async function getAuthenticatedSheetsClient() {
   try {
-    const oauth = await getActiveOAuth();
+    // Get ANY OAuth record (active or inactive) - we'll try to use it
+    const oauth = await getLatestOAuth();
 
     if (!oauth) {
       throw new Error('Google OAuth not configured. Please link Google Drive in admin settings.');
     }
 
-    // Refresh token if needed
+    // Refresh token if needed (this will throw if refresh fails)
     const tokens = await refreshTokenIfNeeded(oauth);
 
     // Create authenticated client
@@ -141,9 +158,15 @@ export async function getAuthenticatedSheetsClient() {
     const drive = google.drive({ version: 'v3', auth: oauth2Client });
 
     // Mark as active since we successfully authenticated
+    // This will reactivate an inactive OAuth if it works
     await prisma.googleOAuth.update({
       where: { id: oauth.id },
       data: { isActive: true },
+    });
+
+    logger.info('Google Sheets client authenticated successfully', {
+      wasInactive: !oauth.isActive,
+      userId: oauth.userId
     });
 
     return {
@@ -157,7 +180,7 @@ export async function getAuthenticatedSheetsClient() {
 
     // Mark as inactive on failure
     try {
-      const oauth = await getActiveOAuth();
+      const oauth = await getLatestOAuth();
       if (oauth) {
         await prisma.googleOAuth.update({
           where: { id: oauth.id },
@@ -175,13 +198,15 @@ export async function getAuthenticatedSheetsClient() {
 /**
  * Run background validation and refresh of OAuth token
  * This keeps the token alive indefinitely through proactive refreshing
+ * Will attempt to reactivate inactive OAuth if it works
  */
 export async function validateOAuthToken() {
   try {
-    const oauth = await getActiveOAuth();
+    // Get any OAuth (active or inactive) - we'll try to validate/reactivate it
+    const oauth = await getLatestOAuth();
 
     if (!oauth) {
-      logger.debug('No active OAuth configuration to validate');
+      logger.debug('No OAuth configuration to validate');
       return;
     }
 
@@ -219,7 +244,7 @@ export async function validateOAuthToken() {
 
     // Mark as inactive on error so frontend shows warning
     try {
-      const oauth = await getActiveOAuth();
+      const oauth = await getLatestOAuth();
       if (oauth) {
         await prisma.googleOAuth.update({
           where: { id: oauth.id },
@@ -238,13 +263,15 @@ let refreshTimeout: NodeJS.Timeout | null = null;
 /**
  * Schedule next OAuth token refresh
  * Schedules refresh for 10 minutes before token expiration
+ * Works with both active and inactive OAuth to attempt reactivation
  */
 export async function scheduleNextRefresh() {
   try {
-    const oauth = await getActiveOAuth();
+    // Get any OAuth (active or inactive) - we'll schedule refresh to attempt reactivation
+    const oauth = await getLatestOAuth();
 
     if (!oauth) {
-      logger.debug('No active OAuth configuration to schedule refresh for');
+      logger.debug('No OAuth configuration to schedule refresh for');
       return;
     }
 

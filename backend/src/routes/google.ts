@@ -2,6 +2,7 @@ import { Router, Request } from 'express';
 import { google } from 'googleapis';
 import { requireAuth, requireAdmin } from '../auth/middleware';
 import { prisma } from '../config/database';
+import { refreshRunProvider } from '../providers';
 
 // Extend Express Request type
 declare module 'express-serve-static-core' {
@@ -282,8 +283,8 @@ router.post('/oauth/refresh', requireAuth, requireAdmin, async (req, res) => {
 // GET /api/google/oauth/status - Check OAuth status
 router.get('/oauth/status', requireAuth, requireAdmin, async (req, res) => {
   try {
+    // Find any OAuth record (active or inactive)
     const oauth = await prisma.googleOAuth.findFirst({
-      where: { isActive: true },
       include: {
         user: {
           select: { email: true, name: true },
@@ -292,9 +293,9 @@ router.get('/oauth/status', requireAuth, requireAdmin, async (req, res) => {
     });
 
     if (!oauth) {
-      return res.json({ 
+      return res.json({
         configured: false,
-        needsRefresh: false,
+        isActive: false,
       });
     }
 

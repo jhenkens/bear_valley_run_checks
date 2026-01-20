@@ -6,7 +6,6 @@ import morgan from 'morgan';
 import { appConfig } from './config/config';
 import { createSessionMiddleware } from './auth/session';
 import { setupSocket } from './socket/runCheckSocket';
-import { createRunProvider } from './providers';
 import { initialize as initializeRunCheckCache } from './services/runCheckCache';
 import { initializeGoogleSheets } from './services/googleSheets';
 import { startOAuthValidationScheduler } from './services/googleOAuth';
@@ -94,10 +93,6 @@ async function startServer() {
       logger.warn('Google Sheets provider configured but skipped in development mode');
       logger.warn('Run checks will be stored in memory only');
     }
-
-    // Initialize run provider (depends on Google Sheets if using sheets provider)
-    const runProvider = createRunProvider();
-    await runProvider.initialize();
 
     // Initialize run check cache
     await initializeRunCheckCache();

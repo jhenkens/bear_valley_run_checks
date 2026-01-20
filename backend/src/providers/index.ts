@@ -25,6 +25,7 @@ export function createRunProvider(): IRunProvider {
   return runProviderInstance;
 }
 
-export * from './runProvider';
-export * from './configRunProvider';
-export * from './sheetsRunProvider';
+export function refreshRunProvider(): IRunProvider {
+    runProviderInstance = null;
+    return createRunProvider();
+}
