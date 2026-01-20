@@ -13,10 +13,10 @@ export function setupSocket(server: HTTPServer): SocketIOServer {
   });
 
   io.on('connection', (socket) => {
-    logger.info('Client connected:', socket.id);
+    logger.info('Client connected', { socketId: socket.id });
 
     socket.on('disconnect', () => {
-      logger.info('Client disconnected:', socket.id);
+      logger.info('Client disconnected', { socketId: socket.id });
     });
   });
 

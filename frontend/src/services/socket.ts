@@ -12,15 +12,14 @@ export function connectSocket(onRunCheckNew: (data: any) => void): Socket {
   });
 
   socket.on('connect', () => {
-    console.log('Socket connected');
+    // Socket connected
   });
 
   socket.on('disconnect', () => {
-    console.log('Socket disconnected');
+    // Socket disconnected
   });
 
   socket.on('runcheck:new', (data) => {
-    console.log('New run check received:', data);
     onRunCheckNew(data);
   });
 

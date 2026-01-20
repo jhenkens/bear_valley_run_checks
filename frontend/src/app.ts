@@ -68,7 +68,7 @@ export function createApp() {
           try {
             this.expandedSections = new Set(JSON.parse(savedSections));
           } catch (e) {
-            console.error('Failed to load expanded sections:', e);
+            // Failed to parse - not critical, will use default state
           }
         }
         await this.checkAuth();
@@ -97,21 +97,17 @@ export function createApp() {
 
     async loadData() {
       try {
-        const [runsRes, checksRes, patrollersRes] = await Promise.all([
-          api.getRuns(),
-          api.getTodayChecks(),
-          api.getPatrollers(),
-        ]);
+        const statusRes = await api.getRunStatus();
 
-        this.runs = runsRes.runs;
-        this.timezone = runsRes.timezone || 'UTC';
-        this.checks = checksRes.checks.map((c: any) => ({
+        this.runs = statusRes.runs;
+        this.timezone = statusRes.timezone || 'UTC';
+        this.checks = statusRes.checks.map((c: any) => ({
           ...c,
           checkTime: new Date(c.checkTime * 1000),
           createdAt: new Date(c.createdAt * 1000),
         }));
-        this.patrollers = patrollersRes.patrollers;
-        this.filteredPatrollers = patrollersRes.patrollers;
+        this.patrollers = statusRes.patrollers;
+        this.filteredPatrollers = statusRes.patrollers;
 
         if (this.user.isAdmin) {
           const usersRes = await api.getUsers();
@@ -295,7 +291,6 @@ export function createApp() {
 
     // Socket
     handleNewCheck(data: any) {
-      console.log('New check received via socket:', data);
       this.loadData(); // Reload data to get fresh checks
     },
 

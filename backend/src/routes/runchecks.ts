@@ -4,34 +4,33 @@ import { getChecks, addCheck } from '../services/runCheckCache';
 import { requireAuth, AuthRequest } from '../auth/middleware';
 import { appConfig } from '../config/config';
 import { logger } from '../utils/logger';
+import { getAllPatrollers } from '../services/patrollerService';
 
 const router = Router();
 const runProvider = createRunProvider();
 
-// GET /api/runs - Get all runs
-router.get('/runs', requireAuth, async (req, res) => {
+// GET /api/run_status - Get combined run status (runs, checks, patrollers, timezone)
+router.get('/run_status', requireAuth, async (req, res) => {
   try {
     const runs = runProvider.getRuns();
-    res.json({ runs, timezone: appConfig.timezone });
-  } catch (error) {
-    logger.error('Error fetching runs:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// GET /api/runchecks/today - Get today's run checks
-router.get('/runchecks/today', requireAuth, async (req, res) => {
-  try {
     const checks = getChecks();
-    // Convert dates to epoch seconds for API
+    const patrollers = await getAllPatrollers();
+    
+    // Convert checks dates to epoch seconds
     const checksWithEpoch = checks.map(check => ({
       ...check,
       checkTime: Math.floor(check.checkTime.getTime() / 1000),
       createdAt: Math.floor(check.createdAt.getTime() / 1000),
     }));
-    res.json({ checks: checksWithEpoch });
+
+    res.json({
+      runs,
+      checks: checksWithEpoch,
+      patrollers,
+      timezone: appConfig.timezone,
+    });
   } catch (error) {
-    logger.error('Error fetching run checks:', error);
+    logger.error('Error fetching run status:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

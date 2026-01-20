@@ -15,7 +15,6 @@ import { logger } from './utils/logger';
 // Import routes
 import authRoutes from './routes/auth';
 import runcheckRoutes from './routes/runchecks';
-import patrollerRoutes from './routes/patrollers';
 import userRoutes from './routes/users';
 
 const app = express();
@@ -50,7 +49,6 @@ app.use(createSessionMiddleware());
 // API Routes
 app.use('/auth', authRoutes);
 app.use('/api', runcheckRoutes);
-app.use('/api', patrollerRoutes);
 app.use('/api', userRoutes);
 
 // Serve static files from frontend in production

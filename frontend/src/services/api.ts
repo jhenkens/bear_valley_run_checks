@@ -50,26 +50,17 @@ export const api = {
     return fetchJSON<{ user: any }>(`${AUTH_BASE}/me`);
   },
 
-  // Runs
-  async getRuns() {
-    return fetchJSON<{ runs: any[]; timezone: string }>(`${API_BASE}/runs`);
+  // Run Status - combined endpoint
+  async getRunStatus() {
+    return fetchJSON<{ runs: any[]; checks: any[]; patrollers: string[]; timezone: string }>(`${API_BASE}/run_status`);
   },
 
   // Run Checks
-  async getTodayChecks() {
-    return fetchJSON<{ checks: any[] }>(`${API_BASE}/runchecks/today`);
-  },
-
   async submitChecks(checks: any[]) {
     return fetchJSON<{ checks: any[] }>(`${API_BASE}/runchecks`, {
       method: 'POST',
       body: JSON.stringify({ checks }),
     });
-  },
-
-  // Patrollers
-  async getPatrollers() {
-    return fetchJSON<{ patrollers: string[] }>(`${API_BASE}/patrollers`);
   },
 
   // Users
