@@ -11,7 +11,3 @@ smtpPass: SMTP_PASS
 emailFrom: EMAIL_FROM
 appUrl: APP_URL
 port: PORT
-googleSheetsId: GOOGLE_SHEETS_ID
-googleDriveFolderId: GOOGLE_DRIVE_FOLDER_ID
-googleServiceAccountEmail: GOOGLE_SERVICE_ACCOUNT_EMAIL
-googlePrivateKey: GOOGLE_PRIVATE_KEY

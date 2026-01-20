@@ -29,14 +29,20 @@ if (appConfig.enableLoginWithoutPassword) {
 
       // Create session directly without magic link
       req.session.userId = user.id;
-
-      res.json({
-        message: 'Logged in successfully (DEV MODE)',
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
+      req.session.save((err) => {
+        if (err) {
+          logger.error('Session save error:', err);
+          return res.status(500).json({ error: 'Failed to create session' });
         }
+
+        res.json({
+          message: 'Logged in successfully (DEV MODE)',
+          user: {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+          }
+        });
       });
     } catch (error) {
       logger.error('Dev login error:', error);
@@ -113,10 +119,29 @@ router.get('/verify', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    req.session.userId = user.id;
+    // Regenerate session for security
+    req.session.regenerate((err) => {
+      if (err) {
+        logger.error('Session regeneration error:', err);
+        return res.status(500).json({ error: 'Failed to create session' });
+      }
 
-    // Redirect to main app
-    res.redirect('/');
+      // Set session user ID
+      req.session.userId = user.id;
+      logger.info(`User ${user.email} authenticated via magic link`);
+
+      // Explicitly save session before redirect
+      req.session.save((saveErr) => {
+        if (saveErr) {
+          logger.error('Session save error:', saveErr);
+          return res.status(500).json({ error: 'Failed to save session' });
+        }
+        
+        logger.info(`Session saved for user ${user.email}, redirecting to /`);
+        // Redirect to main app after session is saved
+        res.redirect('/');
+      });
+    });
   } catch (error) {
     logger.error('Verify error:', error);
     res.status(500).json({ error: 'Internal server error' });

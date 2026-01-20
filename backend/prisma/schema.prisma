@@ -18,8 +18,9 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  sessions   Session[]
-  magicLinks MagicLink[]
+  sessions    Session[]
+  magicLinks  MagicLink[]
+  googleOAuth GoogleOAuth?
 }
 
 model MagicLink {
@@ -49,4 +50,26 @@ model Session {
   userId String?
 
   @@index([sid])
+}
+
+model GoogleOAuth {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  accessToken         String   // Current OAuth access token
+  refreshToken        String   // OAuth refresh token (for renewals)
+  tokenExpiresAt      DateTime // When access token expires
+
+  googleEmail         String   // Google account email (display purposes)
+  googleDriveFolderId String   // Selected folder ID for daily spreadsheets
+  googleSheetsId      String?  // Optional: master run list spreadsheet ID
+
+  lastTestedAt        DateTime @default(now()) // Last successful API call
+  isActive            Boolean  @default(true)  // Can be disabled without deleting
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([userId])
 }

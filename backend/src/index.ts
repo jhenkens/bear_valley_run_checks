@@ -9,6 +9,7 @@ import { setupSocket } from './socket/runCheckSocket';
 import { createRunProvider } from './providers';
 import { initialize as initializeRunCheckCache } from './services/runCheckCache';
 import { initializeGoogleSheets } from './services/googleSheets';
+import { startOAuthValidationScheduler } from './services/googleOAuth';
 import { syncSuperusers } from './services/superuserService';
 import { logger } from './utils/logger';
 
@@ -16,10 +17,16 @@ import { logger } from './utils/logger';
 import authRoutes from './routes/auth';
 import runcheckRoutes from './routes/runchecks';
 import userRoutes from './routes/users';
+import googleRoutes from './routes/google';
 
 const app = express();
 const server = http.createServer(app);
 const io = setupSocket(server);
+
+// Trust proxies (Cloudflare Tunnel + Traefik = 2 proxies)
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', true); // Trust all proxies in the chain
+}
 
 // Make io available to routes
 app.set('io', io);
@@ -27,7 +34,7 @@ app.set('io', io);
 // Middleware
 app.use(cors({
   origin: process.env.NODE_ENV === 'production'
-    ? false
+    ? (process.env.APP_URL || true) // Use APP_URL from env or allow all
     : ['http://localhost:8080', 'http://localhost:3000'],
   credentials: true,
 }));
@@ -50,6 +57,7 @@ app.use(createSessionMiddleware());
 app.use('/auth', authRoutes);
 app.use('/api', runcheckRoutes);
 app.use('/api', userRoutes);
+app.use('/api/google', googleRoutes);
 
 // Serve static files from frontend in production
 if (process.env.NODE_ENV === 'production') {
@@ -94,6 +102,12 @@ async function startServer() {
     // Initialize run check cache
     await initializeRunCheckCache();
 
+    // OAuth validation scheduler (runs hourly)
+    if (appConfig.runProvider === 'sheets' && process.env.NODE_ENV === 'production') {
+      startOAuthValidationScheduler();
+    }
+
+    // Start 
     // Start server
     const port = appConfig.port;
     server.listen(port, () => {

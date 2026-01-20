@@ -87,6 +87,30 @@ export const api = {
       method: 'DELETE',
     });
   },
+
+  // Google OAuth
+  async getGoogleOAuthStatus() {
+    return fetchJSON<any>(`${API_BASE}/google/oauth/status`);
+  },
+
+  async refreshGoogleToken() {
+    return fetchJSON<any>(`${API_BASE}/google/oauth/refresh`, {
+      method: 'POST',
+    });
+  },
+
+  async disconnectGoogle() {
+    return fetchJSON<{ success: boolean }>(`${API_BASE}/google/oauth/disconnect`, {
+      method: 'DELETE',
+    });
+  },
+
+  async updateGoogleFolder(folderId: string, folderName: string, sheetsId?: string) {
+    return fetchJSON<any>(`${API_BASE}/google/oauth/folder`, {
+      method: 'POST',
+      body: JSON.stringify({ folderId, folderName, sheetsId }),
+    });
+  },
 };
 
 export { ApiError };

@@ -1,7 +1,7 @@
 import { IRunProvider } from './runProvider';
 import { Run } from '../config/config';
 import { logger } from '../utils/logger';
-import { getSheetsClient, getSourceSpreadsheetId } from '../services/googleSheets';
+import { getAuthenticatedSheetsClient } from '../services/googleOAuth';
 
 export class SheetsRunProvider implements IRunProvider {
   private runs: Run[] = [];
@@ -14,22 +14,22 @@ export class SheetsRunProvider implements IRunProvider {
     }
 
     try {
-      const sheets = getSheetsClient();
-      const spreadsheetId = getSourceSpreadsheetId();
+      const authClient = await getAuthenticatedSheetsClient();
+      const spreadsheetId = authClient.sheetsId;
 
-      if (!sheets || !spreadsheetId) {
-        throw new Error('Google Sheets not initialized. Call initializeGoogleSheets() first.');
+      if (!authClient.sheets || !spreadsheetId) {
+        throw new Error('Google OAuth not configured or no source spreadsheet selected.');
       }
 
       // Get the first sheet to read run data
-      const spreadsheet = await sheets.spreadsheets.get({
+      const spreadsheet = await authClient.sheets.spreadsheets.get({
         spreadsheetId,
       });
 
       const firstSheet = spreadsheet.data.sheets?.[0]?.properties?.title || 'Sheet1';
       
       // Read all data from the first sheet
-      const response = await sheets.spreadsheets.values.get({
+      const response = await authClient.sheets.spreadsheets.values.get({
         spreadsheetId,
         range: `${firstSheet}`,
       });
@@ -76,9 +76,16 @@ export class SheetsRunProvider implements IRunProvider {
       }
 
       logger.info(`SheetsRunProvider initialized with ${this.runs.length} runs from spreadsheet`);
-    } catch (error) {
-      logger.error('Error loading runs from Google Sheets:', error);
-      throw error;
+    } catch (error: any) {
+      // If OAuth is not configured, log a warning but don't prevent server startup
+      if (error.message?.includes('OAuth not configured')) {
+        logger.warn('Google OAuth not yet configured. Please link Google Drive in admin settings.');
+        logger.warn('Run provider will return empty run list until OAuth is configured.');
+        this.runs = [];
+      } else {
+        logger.error('Error loading runs from Google Sheets:', error);
+        throw error;
+      }
     }
   }
 

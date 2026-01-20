@@ -1,6 +1,7 @@
 import { google } from 'googleapis';
 import { appConfig } from '../config/config';
 import { logger } from '../utils/logger';
+import { getAuthenticatedSheetsClient } from './googleOAuth';
 
 export interface RunCheck {
   id: string;
@@ -11,9 +12,6 @@ export interface RunCheck {
   createdAt: Date;
 }
 
-let sheets: any = null;
-let drive: any = null;
-let sourceSpreadsheetId: string = ''; // Source of truth for run names
 let dailySpreadsheetId: string = ''; // Today's spreadsheet for checks
 let dailySpreadsheetDate: string = ''; // Track which day's spreadsheet we have
 
@@ -28,51 +26,13 @@ export async function initializeGoogleSheets(): Promise<void> {
     return;
   }
 
-  if (!appConfig.googleSheetsId || !appConfig.googleDriveFolderId || !appConfig.googleServiceAccountEmail || !appConfig.googlePrivateKey) {
-    logger.error('Google Sheets/Drive credentials not configured:', {
-      hasGoogleSheetsId: !!appConfig.googleSheetsId,
-      googleSheetsId: appConfig.googleSheetsId || 'NOT SET',
-      hasGoogleDriveFolderId: !!appConfig.googleDriveFolderId,
-      googleDriveFolderId: appConfig.googleDriveFolderId || 'NOT SET',
-      hasGoogleServiceAccountEmail: !!appConfig.googleServiceAccountEmail,
-      googleServiceAccountEmail: appConfig.googleServiceAccountEmail || 'NOT SET',
-      hasGooglePrivateKey: !!appConfig.googlePrivateKey,
-    });
-    throw new Error('Google Sheets/Drive credentials not configured');
-  }
-
-  const auth = new google.auth.GoogleAuth({
-    credentials: {
-      client_email: appConfig.googleServiceAccountEmail,
-      private_key: appConfig.googlePrivateKey.replace(/\\n/g, '\n'),
-    },
-    scopes: [
-      'https://www.googleapis.com/auth/spreadsheets',
-      'https://www.googleapis.com/auth/drive.file'
-    ],
-  });
-
-  sheets = google.sheets({ version: 'v4', auth });
-  drive = google.drive({ version: 'v3', auth });
-  sourceSpreadsheetId = appConfig.googleSheetsId;
-
-  logger.info('Google Sheets and Drive API initialized');
-  logger.info(`Source spreadsheet: ${sourceSpreadsheetId}`);
-  logger.info(`Daily spreadsheets folder: ${appConfig.googleDriveFolderId}`);
+  // OAuth will be checked when actually making API calls
+  logger.info('Google Sheets configured to use OAuth authentication');
 }
 
 function getTodaySheetName(): string {
   const today = new Date();
   return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-}
-
-// Helper functions for other services
-export function getSheetsClient(): any {
-  return sheets;
-}
-
-export function getSourceSpreadsheetId(): string {
-  return sourceSpreadsheetId;
 }
 
 export async function ensureDailySpreadsheet(): Promise<string> {
@@ -84,16 +44,23 @@ export async function ensureDailySpreadsheet(): Promise<string> {
   }
 
   try {
+    // Get authenticated clients
+    const { sheets, drive, folderId } = await getAuthenticatedSheetsClient();
+
+    if (!folderId) {
+      throw new Error('Google Drive folder not configured. Please select a folder in admin settings.');
+    }
+
     // Search for existing spreadsheet in the folder
     const searchResponse = await drive.files.list({
-      q: `name='${today}' and '${appConfig.googleDriveFolderId}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`,
+      q: `name='${today}' and '${folderId}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`,
       fields: 'files(id, name)',
       spaces: 'drive',
     });
 
     if (searchResponse.data.files && searchResponse.data.files.length > 0) {
       // Found existing spreadsheet
-      dailySpreadsheetId = searchResponse.data.files[0].id;
+      dailySpreadsheetId = searchResponse.data.files[0].id || '';
       dailySpreadsheetDate = today;
       logger.info(`Found existing daily spreadsheet: ${today} (${dailySpreadsheetId})`);
       return dailySpreadsheetId;
@@ -104,12 +71,16 @@ export async function ensureDailySpreadsheet(): Promise<string> {
       requestBody: {
         name: today,
         mimeType: 'application/vnd.google-apps.spreadsheet',
-        parents: [appConfig.googleDriveFolderId],
+        parents: [folderId],
       },
       fields: 'id',
     });
 
     const newSpreadsheetId = createResponse.data.id;
+
+    if (!newSpreadsheetId) {
+      throw new Error('Failed to create spreadsheet: no ID returned');
+    }
 
     // Add "Run Checks" sheet and format it
     await sheets.spreadsheets.batchUpdate({
@@ -139,7 +110,7 @@ export async function ensureDailySpreadsheet(): Promise<string> {
       },
     });
 
-    dailySpreadsheetId = newSpreadsheetId!;
+    dailySpreadsheetId = newSpreadsheetId;
     dailySpreadsheetDate = today;
     logger.info(`Created new daily spreadsheet: ${today} (${dailySpreadsheetId})`);
     
@@ -157,7 +128,9 @@ export async function loadTodayChecks(): Promise<RunCheck[]> {
 
   try {
     const spreadsheetId = await ensureDailySpreadsheet();
-    const response = await sheets.spreadsheets.values.get({
+    const authClient = await getAuthenticatedSheetsClient();
+    
+    const response = await authClient.sheets.spreadsheets.values.get({
       spreadsheetId,
       range: 'Run Checks!A2:E',
     });
@@ -183,6 +156,7 @@ export async function appendRunCheck(check: Omit<RunCheck, 'id' | 'createdAt'>):
     return;
   }
 
+  const { sheets } = await getAuthenticatedSheetsClient();
   const spreadsheetId = await ensureDailySpreadsheet();
   const now = new Date().toISOString();
 

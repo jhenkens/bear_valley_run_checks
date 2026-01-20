@@ -28,6 +28,9 @@ export function createApp() {
     message: null as { type: 'success' | 'error'; text: string } | null,
     expandedSections: new Set<string>(),
     timezone: 'UTC' as string,
+    googleOAuthStatus: null as any,
+    googlePickerLoaded: false,
+    _initialized: false, // Guard against double initialization
 
     // Computed
     get groupedRuns() {
@@ -60,6 +63,12 @@ export function createApp() {
 
     // Init
     async init() {
+      if (this._initialized) {
+        console.log('App already initialized, skipping...');
+        return;
+      }
+      this._initialized = true;
+
       try {
         this.loading = true;
         // Load expanded sections from localStorage
@@ -112,6 +121,13 @@ export function createApp() {
         if (this.user.isAdmin) {
           const usersRes = await api.getUsers();
           this.users = usersRes.users;
+          
+          // Load Google OAuth status
+          try {
+            this.googleOAuthStatus = await api.getGoogleOAuthStatus();
+          } catch (err) {
+            console.error('Failed to load Google OAuth status:', err);
+          }
         }
       } catch (err: any) {
         this.error = err.message || 'Failed to load data';
@@ -194,6 +210,12 @@ export function createApp() {
     async submitChecks() {
       try {
         this.error = null;
+
+        // Check if OAuth token needs refresh
+        if (this.googleOAuthStatus?.configured && this.googleOAuthStatus?.needsRefresh) {
+          this.error = 'Google Drive connection needs refresh. Please refresh the connection in the Admin tab.';
+          return;
+        }
 
         if (!this.confirmPatroller) {
           this.error = 'Please select a patroller';
@@ -286,6 +308,74 @@ export function createApp() {
         await this.loadData();
       } catch (err: any) {
         this.error = err.message || 'Failed to delete user';
+      }
+    },
+
+    // Google OAuth
+    linkGoogleDrive() {
+      window.location.href = '/api/google/oauth/authorize';
+    },
+
+    async refreshGoogleToken() {
+      try {
+        await api.refreshGoogleToken();
+        this.showMessage('success', 'Google connection refreshed');
+        await this.loadData();
+      } catch (err: any) {
+        this.error = err.message || 'Failed to refresh token';
+      }
+    },
+
+    async disconnectGoogle() {
+      if (!confirm('Disconnect Google Drive? You will need to re-link to use Google Sheets.')) return;
+
+      try {
+        await api.disconnectGoogle();
+        this.showMessage('success', 'Google Drive disconnected');
+        await this.loadData();
+      } catch (err: any) {
+        this.error = err.message || 'Failed to disconnect';
+      }
+    },
+
+    async openGooglePicker() {
+      try {
+        // Load picker if not already loaded
+        if (!this.googlePickerLoaded) {
+          await new Promise<void>((resolve) => {
+            (window as any).gapi.load('picker', () => {
+              this.googlePickerLoaded = true;
+              resolve();
+            });
+          });
+        }
+
+        // Get OAuth token from status
+        if (!this.googleOAuthStatus?.configured) {
+          this.error = 'Please link Google Drive first';
+          return;
+        }
+
+        const picker = new (window as any).google.picker.PickerBuilder()
+          .addView((window as any).google.picker.ViewId.FOLDERS)
+          .setOAuthToken(this.googleOAuthStatus.tokenExpiresAt) // Use stored token
+          .setCallback(async (data: any) => {
+            if (data.action === (window as any).google.picker.Action.PICKED) {
+              const folder = data.docs[0];
+              try {
+                await api.updateGoogleFolder(folder.id, folder.name);
+                this.showMessage('success', `Folder "${folder.name}" selected`);
+                await this.loadData();
+              } catch (err: any) {
+                this.error = err.message || 'Failed to update folder';
+              }
+            }
+          })
+          .build();
+
+        picker.setVisible(true);
+      } catch (err: any) {
+        this.error = err.message || 'Failed to open folder picker';
       }
     },
 

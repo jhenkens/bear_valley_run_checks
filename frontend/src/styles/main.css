@@ -331,6 +331,67 @@ body {
   color: #666;
 }
 
+/* Google OAuth Styles */
+.oauth-status {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.oauth-info div {
+  margin-bottom: 0.5rem;
+}
+
+.oauth-info strong {
+  font-weight: 600;
+  margin-right: 0.5rem;
+}
+
+.oauth-warning {
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  color: #856404;
+  padding: 0.75rem;
+  border-radius: 4px;
+  margin-top: 0.5rem;
+}
+
+.oauth-error {
+  background: #f8d7da;
+  border: 1px solid #f5c6cb;
+  color: #721c24;
+  padding: 0.75rem;
+  border-radius: 4px;
+  margin-top: 0.5rem;
+}
+
+.oauth-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.oauth-warning-banner {
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 4px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.oauth-warning-banner strong {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #856404;
+}
+
+.oauth-warning-banner p {
+  color: #856404;
+  margin: 0;
+}
+
 /* Admin */
 .user-table {
   background: white;

@@ -32,10 +32,6 @@ export interface AppConfig {
   emailFrom: string;
   appUrl: string;
   port: number;
-  googleSheetsId?: string;
-  googleDriveFolderId?: string;
-  googleServiceAccountEmail?: string;
-  googlePrivateKey?: string;
 }
 
 function loadConfig(): AppConfig {
@@ -69,10 +65,6 @@ function loadConfig(): AppConfig {
     emailFrom: config.get<string>('emailFrom'),
     appUrl: config.get<string>('appUrl'),
     port: config.get<number>('port'),
-    googleSheetsId: config.has('googleSheetsId') ? config.get<string>('googleSheetsId') : undefined,
-    googleDriveFolderId: config.has('googleDriveFolderId') ? config.get<string>('googleDriveFolderId') : undefined,
-    googleServiceAccountEmail: config.has('googleServiceAccountEmail') ? config.get<string>('googleServiceAccountEmail') : undefined,
-    googlePrivateKey: config.has('googlePrivateKey') ? config.get<string>('googlePrivateKey') : undefined,
   };
 }
 
