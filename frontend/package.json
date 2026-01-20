@@ -1,0 +1,26 @@
+{
+  "name": "bear-valley-run-checks-frontend",
+  "version": "1.0.0",
+  "description": "Frontend for Bear Valley Run Checks",
+  "main": "dist/bundle.js",
+  "scripts": {
+    "dev": "webpack serve --mode development",
+    "build": "webpack --mode production",
+    "watch": "webpack --watch --mode development"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "webpack": "^5.97.1",
+    "webpack-cli": "^5.1.4",
+    "webpack-dev-server": "^4.15.2",
+    "ts-loader": "^9.5.1",
+    "css-loader": "^6.11.0",
+    "style-loader": "^3.3.4"
+  }
+}

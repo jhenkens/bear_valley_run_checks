@@ -1,0 +1,23 @@
+{
+  "name": "bear-valley-run-checks",
+  "version": "1.0.0",
+  "description": "Mobile-first web application for ski patrol to track run checks with real-time updates",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build:backend": "cd backend && npm run build",
+    "build:frontend": "cd frontend && npm run build",
+    "build:all": "npm run build:backend && npm run build:frontend",
+    "prisma:generate": "cd backend && npm run prisma:generate",
+    "prisma:migrate": "cd backend && npm run prisma:migrate"
+  },
+  "keywords": [
+    "ski-patrol",
+    "run-checks",
+    "real-time"
+  ],
+  "author": "",
+  "license": "ISC"
+}
