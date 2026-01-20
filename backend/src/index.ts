@@ -53,9 +53,12 @@ app.use('/api', userRoutes);
 
 // Serve static files from frontend in production
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../../frontend/dist')));
+  // Serve bundle.js and other built assets from dist
+  app.use(express.static(path.join(__dirname, '../frontend/dist')));
+  // Serve index.html from public
+  app.use(express.static(path.join(__dirname, '../frontend/public')));
   app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../../frontend/dist/index.html'));
+    res.sendFile(path.join(__dirname, '../frontend/public/index.html'));
   });
 }
 
