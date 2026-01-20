@@ -261,6 +261,38 @@ body {
   border: 1px solid #f5c6cb;
 }
 
+.message.warning {
+  background: #fef3c7;
+  color: #78350f;
+  border: 2px solid #f59e0b;
+}
+
+/* System Notifications */
+.notification {
+  padding: 1rem;
+  margin: 1rem;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.notification-info {
+  background: #e3f2fd;
+  color: #1565c0;
+  border: 2px solid #2196f3;
+}
+
+.notification-warning {
+  background: #fef3c7;
+  color: #78350f;
+  border: 2px solid #f59e0b;
+}
+
+.notification-error {
+  background: #f8d7da;
+  color: #721c24;
+  border: 2px solid #f5c6cb;
+}
+
 /* History */
 .history-section {
   background: white;

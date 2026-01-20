@@ -1,4 +1,5 @@
 import { google } from 'googleapis';
+import { formatInTimeZone } from 'date-fns-tz';
 import { appConfig } from '../config/config';
 import { logger } from '../utils/logger';
 import { getAuthenticatedSheetsClient } from './googleOAuth';
@@ -28,47 +29,15 @@ export async function initializeGoogleSheets(): Promise<void> {
  * Get today's date in the configured timezone (YYYY-MM-DD format)
  */
 function getTodaySheetName(): string {
-  const now = new Date();
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: appConfig.timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  });
-
-  const parts = formatter.formatToParts(now);
-  const year = parts.find(p => p.type === 'year')!.value;
-  const month = parts.find(p => p.type === 'month')!.value;
-  const day = parts.find(p => p.type === 'day')!.value;
-
-  return `${year}-${month}-${day}`;
+  return formatInTimeZone(new Date(), appConfig.timezone, 'yyyy-MM-dd');
 }
 
 /**
  * Format a date to a string in the configured timezone
- * Returns format: YYYY-MM-DD HH:MM:SS
+ * Returns format: YYYY-MM-DD HH:mm:ss
  */
 function formatDateInTimezone(date: Date): string {
-  const formatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: appConfig.timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false
-  });
-
-  const parts = formatter.formatToParts(date);
-  const year = parts.find(p => p.type === 'year')!.value;
-  const month = parts.find(p => p.type === 'month')!.value;
-  const day = parts.find(p => p.type === 'day')!.value;
-  const hour = parts.find(p => p.type === 'hour')!.value;
-  const minute = parts.find(p => p.type === 'minute')!.value;
-  const second = parts.find(p => p.type === 'second')!.value;
-
-  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+  return formatInTimeZone(date, appConfig.timezone, 'yyyy-MM-dd HH:mm:ss');
 }
 
 export async function ensureDailySpreadsheet(): Promise<string> {

@@ -19,6 +19,8 @@
     "config": "^4.2.0",
     "connect-sqlite3": "^0.9.15",
     "cors": "^2.8.5",
+    "date-fns": "^4.1.0",
+    "date-fns-tz": "^3.2.0",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "express-session": "^1.18.1",

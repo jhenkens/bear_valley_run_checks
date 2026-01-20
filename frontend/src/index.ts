@@ -51,6 +51,11 @@ if (appRoot) {
           <button @click="logout">Logout</button>
         </div>
 
+        <!-- System Notifications -->
+        <template x-for="notification in notifications" :key="notification.message">
+          <div :class="'notification notification-' + notification.type" x-text="notification.message"></div>
+        </template>
+
         <!-- Message -->
         <div x-show="message" :class="'message ' + (message?.type || '')" x-text="message?.text" style="margin: 1rem;"></div>
 
@@ -90,12 +95,6 @@ if (appRoot) {
 
         <!-- Confirm Page -->
         <div class="content" x-show="showConfirm">
-          <!-- Google OAuth Warning Banner (non-blocking) -->
-          <div x-show="googleOAuthStatus?.configured && !googleOAuthStatus?.isActive" class="oauth-warning-banner" style="margin-bottom: 1rem; padding: 1rem; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px;">
-            <strong>⚠️ Google Drive Disconnected</strong>
-            <p style="margin: 0.5rem 0 0 0;">The Google Drive connection is currently inactive. Run checks will be saved to memory only and may not persist. The backend should automatically reconnect, but you can manually refresh the connection in the Admin tab if this persists.</p>
-          </div>
-
           <div class="confirm-container">
             <div class="confirm-list">
               <h3>Selected Runs (<span x-text="cart.length"></span>)</h3>
@@ -195,7 +194,6 @@ if (appRoot) {
                 </div>
 
                 <div class="oauth-actions" style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                  <button class="btn" @click="openGooglePicker">Select Folder</button>
                   <button class="btn" @click="refreshGoogleToken">Refresh Connection</button>
                   <button class="btn-danger" @click="disconnectGoogle">Disconnect</button>
                   <button class="btn" style="background: #9e9e9e;" @click="testMarkInactive" x-show="user?.isSuperuser">🧪 Test: Force Inactive</button>

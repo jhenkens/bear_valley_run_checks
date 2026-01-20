@@ -13,6 +13,7 @@ export function createApp() {
     runs: [] as any[],
     checks: [] as any[],
     patrollers: [] as string[],
+    notifications: [] as Array<{ type: 'info' | 'warning' | 'error'; message: string }>,
     cart: [] as any[],
     loginEmail: '',
     loginMessage: '',
@@ -25,11 +26,10 @@ export function createApp() {
     users: [] as any[],
     newUserEmail: '',
     newUserName: '',
-    message: null as { type: 'success' | 'error'; text: string } | null,
+    message: null as { type: 'success' | 'error' | 'warning'; text: string } | null,
     expandedSections: new Set<string>(),
     timezone: 'UTC' as string,
     googleOAuthStatus: null as any,
-    googlePickerLoaded: false,
     googleDriveWasDisconnected: false, // Track if we showed a disconnection warning
     _initialized: false, // Guard against double initialization
 
@@ -111,6 +111,7 @@ export function createApp() {
 
         this.runs = statusRes.runs;
         this.timezone = statusRes.timezone || 'UTC';
+        this.notifications = statusRes.notifications || [];
         this.checks = statusRes.checks.map((c: any) => ({
           ...c,
           checkTime: new Date(c.checkTime * 1000),
@@ -122,13 +123,17 @@ export function createApp() {
         if (this.user.isAdmin) {
           const usersRes = await api.getUsers();
           this.users = usersRes.users;
-          
-          // Load Google OAuth status
+
+          // Load Google OAuth status (admin only)
           try {
             this.googleOAuthStatus = await api.getGoogleOAuthStatus();
           } catch (err) {
             console.error('Failed to load Google OAuth status:', err);
+            this.googleOAuthStatus = null;
           }
+        } else {
+          // Clear OAuth status for non-admins
+          this.googleOAuthStatus = null;
         }
       } catch (err: any) {
         this.error = err.message || 'Failed to load data';
@@ -254,7 +259,7 @@ export function createApp() {
           }
         } else {
           // Drive save failed - stored in memory only
-          this.showMessage('success', `⚠️ Submitted ${checks.length} run check(s) - saved to memory only (Google Drive disconnected)`);
+          this.showMessage('warning', `⚠️ Submitted ${checks.length} run check(s) - saved to memory only (Google Drive disconnected)`);
           this.googleDriveWasDisconnected = true;
         }
 
@@ -363,54 +368,13 @@ export function createApp() {
       }
     },
 
-    async openGooglePicker() {
-      try {
-        // Load picker if not already loaded
-        if (!this.googlePickerLoaded) {
-          await new Promise<void>((resolve) => {
-            (window as any).gapi.load('picker', () => {
-              this.googlePickerLoaded = true;
-              resolve();
-            });
-          });
-        }
-
-        // Get OAuth token from status
-        if (!this.googleOAuthStatus?.configured) {
-          this.error = 'Please link Google Drive first';
-          return;
-        }
-
-        const picker = new (window as any).google.picker.PickerBuilder()
-          .addView((window as any).google.picker.ViewId.FOLDERS)
-          .setOAuthToken(this.googleOAuthStatus.tokenExpiresAt) // Use stored token
-          .setCallback(async (data: any) => {
-            if (data.action === (window as any).google.picker.Action.PICKED) {
-              const folder = data.docs[0];
-              try {
-                await api.updateGoogleFolder(folder.id, folder.name);
-                this.showMessage('success', `Folder "${folder.name}" selected`);
-                await this.loadData();
-              } catch (err: any) {
-                this.error = err.message || 'Failed to update folder';
-              }
-            }
-          })
-          .build();
-
-        picker.setVisible(true);
-      } catch (err: any) {
-        this.error = err.message || 'Failed to open folder picker';
-      }
-    },
-
     // Socket
     handleNewCheck(data: any) {
       this.loadData(); // Reload data to get fresh checks
     },
 
     // Helpers
-    showMessage(type: 'success' | 'error', text: string) {
+    showMessage(type: 'success' | 'error' | 'warning', text: string) {
       this.message = { type, text };
       setTimeout(() => {
         this.message = null;

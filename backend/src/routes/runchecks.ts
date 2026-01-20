@@ -5,17 +5,18 @@ import { requireAuth, AuthRequest } from '../auth/middleware';
 import { appConfig } from '../config/config';
 import { logger } from '../utils/logger';
 import { getAllPatrollers } from '../services/patrollerService';
+import { getActiveOAuth } from '../services/googleOAuth';
 
 const router = Router();
 const runProvider = createRunProvider();
 
-// GET /api/run_status - Get combined run status (runs, checks, patrollers, timezone)
+// GET /api/run_status - Get combined run status (runs, checks, patrollers, timezone, notifications)
 router.get('/run_status', requireAuth, async (req, res) => {
   try {
     const runs = runProvider.getRuns();
     const checks = getChecks();
     const patrollers = await getAllPatrollers();
-    
+
     // Convert checks dates to epoch seconds
     const checksWithEpoch = checks.map(check => ({
       ...check,
@@ -23,11 +24,35 @@ router.get('/run_status', requireAuth, async (req, res) => {
       createdAt: Math.floor(check.createdAt.getTime() / 1000),
     }));
 
+    // Collect system notifications
+    const notifications: Array<{ type: 'info' | 'warning' | 'error'; message: string }> = [];
+
+    // Check Google OAuth status if using sheets provider
+    if (appConfig.runProvider === 'sheets') {
+      try {
+        const oauth = await getActiveOAuth();
+        if (!oauth) {
+          notifications.push({
+            type: 'warning',
+            message: '⚠️ Google Drive not connected. Run checks will be saved to memory only and may not persist. Please link Google Drive in the Admin panel.'
+          });
+        } else if (!oauth.isActive) {
+          notifications.push({
+            type: 'warning',
+            message: '⚠️ Google Drive connection inactive. Run checks will be saved to memory only. The system is attempting to reconnect automatically.'
+          });
+        }
+      } catch (error) {
+        logger.error('Error checking OAuth status:', error);
+      }
+    }
+
     res.json({
       runs,
       checks: checksWithEpoch,
       patrollers,
       timezone: appConfig.timezone,
+      notifications,
     });
   } catch (error) {
     logger.error('Error fetching run status:', error);

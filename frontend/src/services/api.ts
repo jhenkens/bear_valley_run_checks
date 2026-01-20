@@ -1,6 +1,19 @@
 const API_BASE = '/api';
 const AUTH_BASE = '/auth';
 
+// Types
+export interface RunCheckSubmit {
+  runName: string;
+  section: string;
+  patroller: string;
+  checkTime: number; // epoch seconds
+}
+
+export interface RunCheck extends RunCheckSubmit {
+  id: string;
+  createdAt: number; // epoch seconds
+}
+
 class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message);
@@ -52,12 +65,18 @@ export const api = {
 
   // Run Status - combined endpoint
   async getRunStatus() {
-    return fetchJSON<{ runs: any[]; checks: any[]; patrollers: string[]; timezone: string }>(`${API_BASE}/run_status`);
+    return fetchJSON<{
+      runs: any[];
+      checks: any[];
+      patrollers: string[];
+      timezone: string;
+      notifications: Array<{ type: 'info' | 'warning' | 'error'; message: string }>;
+    }>(`${API_BASE}/run_status`);
   },
 
   // Run Checks
-  async submitChecks(checks: any[]) {
-    return fetchJSON<{ checks: any[]; googleDriveSaved: boolean }>(`${API_BASE}/runchecks`, {
+  async submitChecks(checks: RunCheckSubmit[]) {
+    return fetchJSON<{ checks: RunCheck[]; googleDriveSaved: boolean }>(`${API_BASE}/runchecks`, {
       method: 'POST',
       body: JSON.stringify({ checks }),
     });
@@ -102,13 +121,6 @@ export const api = {
   async disconnectGoogle() {
     return fetchJSON<{ success: boolean }>(`${API_BASE}/google/oauth/disconnect`, {
       method: 'DELETE',
-    });
-  },
-
-  async updateGoogleFolder(folderId: string, folderName: string, sheetsId?: string) {
-    return fetchJSON<any>(`${API_BASE}/google/oauth/folder`, {
-      method: 'POST',
-      body: JSON.stringify({ folderId, folderName, sheetsId }),
     });
   },
 
