@@ -34,10 +34,10 @@ function getTodaySheetName(): string {
 
 /**
  * Format a date to a string in the configured timezone
- * Returns format: YYYY-MM-DD HH:mm:ss
+ * Returns format: YYYY-MM-DD HH:mm:ss zzz (e.g., 2026-01-20 14:30:00 PST)
  */
 function formatDateInTimezone(date: Date): string {
-  return formatInTimeZone(date, appConfig.timezone, 'yyyy-MM-dd HH:mm:ss');
+  return formatInTimeZone(date, appConfig.timezone, 'yyyy-MM-dd HH:mm:ss zzz');
 }
 
 export async function ensureDailySpreadsheet(): Promise<string> {

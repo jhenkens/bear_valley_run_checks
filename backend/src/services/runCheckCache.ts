@@ -3,12 +3,17 @@ import { formatInTimeZone } from 'date-fns-tz';
 import { appConfig } from '../config/config';
 import { logger } from '../utils/logger';
 
-let cache: RunCheck[] = [];
+interface CachedRunCheck extends RunCheck {
+  writtenToSheet: boolean;
+}
+
+let cache: CachedRunCheck[] = [];
 let lastRefresh: Date = new Date();
 
 export async function initialize(): Promise<void> {
   if (appConfig.runProvider === 'sheets') {
-    cache = await loadTodayChecks();
+    const loadedChecks = await loadTodayChecks();
+    cache = loadedChecks.map(check => ({ ...check, writtenToSheet: true }));
     lastRefresh = new Date();
     logger.info(`Run check cache initialized with ${cache.length} checks from Google Sheets`);
   } else {
@@ -24,21 +29,55 @@ export function getChecks(): RunCheck[] {
 }
 
 export async function addCheck(check: Omit<RunCheck, 'id' | 'createdAt'>): Promise<{ check: RunCheck; googleDriveSaved: boolean }> {
-  const newCheck: RunCheck = {
+  const newCheck: CachedRunCheck = {
     ...check,
     id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     createdAt: new Date(),
+    writtenToSheet: false,
   };
 
   cache.push(newCheck);
 
-  // Persist to Google Sheets if configured
+  // Persist ALL unwritten checks to Google Sheets if configured
   let googleDriveSaved = false;
   if (appConfig.runProvider === 'sheets') {
-    googleDriveSaved = await appendToSheet(check);
+    googleDriveSaved = await flushPendingChecks();
   }
 
   return { check: newCheck, googleDriveSaved };
+}
+
+/**
+ * Write all checks that haven't been written to Google Sheets yet
+ * Returns true if all writes succeeded
+ */
+async function flushPendingChecks(): Promise<boolean> {
+  const pendingChecks = cache.filter(c => !c.writtenToSheet);
+  
+  if (pendingChecks.length === 0) {
+    return true;
+  }
+
+  logger.info(`Flushing ${pendingChecks.length} pending checks to Google Sheets`);
+  
+  let allSucceeded = true;
+  for (const check of pendingChecks) {
+    const success = await appendToSheet(check);
+    if (success) {
+      check.writtenToSheet = true;
+    } else {
+      allSucceeded = false;
+    }
+  }
+
+  if (allSucceeded) {
+    logger.info(`Successfully flushed all ${pendingChecks.length} pending checks`);
+  } else {
+    const stillPending = cache.filter(c => !c.writtenToSheet).length;
+    logger.warn(`Some checks failed to write. ${stillPending} checks still pending`);
+  }
+
+  return allSucceeded;
 }
 
 export function clearCache(): void {
@@ -72,7 +111,8 @@ function scheduleMidnightReload(): void {
     logger.info('Midnight reload triggered (in configured timezone)');
     clearCache();
     if (appConfig.runProvider === 'sheets') {
-      cache = await loadTodayChecks();
+      const loadedChecks = await loadTodayChecks();
+      cache = loadedChecks.map(check => ({ ...check, writtenToSheet: true }));
     }
     scheduleMidnightReload(); // Schedule next reload
   }, msUntilMidnight);
