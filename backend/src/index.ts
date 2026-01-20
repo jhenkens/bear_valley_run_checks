@@ -74,12 +74,8 @@ async function startServer() {
     // Sync superusers from config.yaml to database
     await syncSuperusers();
 
-    // Initialize run provider
-    const runProvider = createRunProvider();
-    await runProvider.initialize();
-
-    // Initialize Google Sheets only in production or when explicitly using sheets provider
-    // In development, we skip Google Sheets to avoid external dependencies
+    // Initialize Google Sheets BEFORE run provider (if using sheets provider)
+    // SheetsRunProvider depends on Google Sheets being initialized
     if (appConfig.runProvider === 'sheets' && process.env.NODE_ENV === 'production') {
       await initializeGoogleSheets();
       logger.info('Google Sheets integration enabled');
@@ -87,6 +83,10 @@ async function startServer() {
       logger.warn('Google Sheets provider configured but skipped in development mode');
       logger.warn('Run checks will be stored in memory only');
     }
+
+    // Initialize run provider (depends on Google Sheets if using sheets provider)
+    const runProvider = createRunProvider();
+    await runProvider.initialize();
 
     // Initialize run check cache
     await initializeRunCheckCache();
