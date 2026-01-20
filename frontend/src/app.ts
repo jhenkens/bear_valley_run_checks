@@ -30,6 +30,7 @@ export function createApp() {
     timezone: 'UTC' as string,
     googleOAuthStatus: null as any,
     googlePickerLoaded: false,
+    googleDriveWasDisconnected: false, // Track if we showed a disconnection warning
     _initialized: false, // Guard against double initialization
 
     // Computed
@@ -211,11 +212,8 @@ export function createApp() {
       try {
         this.error = null;
 
-        // Check if OAuth token needs refresh
-        if (this.googleOAuthStatus?.configured && this.googleOAuthStatus?.needsRefresh) {
-          this.error = 'Google Drive connection needs refresh. Please refresh the connection in the Admin tab.';
-          return;
-        }
+        // No blocking - we allow submissions even if Drive is disconnected
+        // The backend will handle the failure gracefully
 
         if (!this.confirmPatroller) {
           this.error = 'Please select a patroller';
@@ -242,9 +240,24 @@ export function createApp() {
           checkTime: checkTimeEpoch,
         }));
 
-        await api.submitChecks(checks);
+        const response = await api.submitChecks(checks);
 
-        this.showMessage('success', `Submitted ${checks.length} run check(s)`);
+        // Check if Google Drive save succeeded
+        if (response.googleDriveSaved) {
+          // Drive save succeeded
+          if (this.googleDriveWasDisconnected) {
+            // Drive was previously disconnected but is now working
+            this.showMessage('success', `✅ Submitted ${checks.length} run check(s) - Google Drive reconnected!`);
+            this.googleDriveWasDisconnected = false;
+          } else {
+            this.showMessage('success', `Submitted ${checks.length} run check(s)`);
+          }
+        } else {
+          // Drive save failed - stored in memory only
+          this.showMessage('success', `⚠️ Submitted ${checks.length} run check(s) - saved to memory only (Google Drive disconnected)`);
+          this.googleDriveWasDisconnected = true;
+        }
+
         this.clearCart();
         await this.loadData();
       } catch (err: any) {
@@ -335,6 +348,18 @@ export function createApp() {
         await this.loadData();
       } catch (err: any) {
         this.error = err.message || 'Failed to disconnect';
+      }
+    },
+
+    async testMarkInactive() {
+      if (!confirm('Force Google OAuth into inactive state for testing? The next successful API call will reactivate it.')) return;
+
+      try {
+        await api.testMarkOAuthInactive();
+        this.showMessage('success', '🧪 OAuth marked as inactive. Submit a run check to test reconnection.');
+        await this.loadData();
+      } catch (err: any) {
+        this.error = err.message || 'Failed to mark inactive';
       }
     },
 

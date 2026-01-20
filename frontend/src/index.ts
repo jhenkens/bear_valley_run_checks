@@ -90,10 +90,10 @@ if (appRoot) {
 
         <!-- Confirm Page -->
         <div class="content" x-show="showConfirm">
-          <!-- Google OAuth Warning Banner -->
-          <div x-show="googleOAuthStatus?.configured && googleOAuthStatus?.needsRefresh" class="oauth-warning-banner" style="margin-bottom: 1rem; padding: 1rem; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px;">
-            <strong>⚠️ Google Drive Connection Stale</strong>
-            <p style="margin: 0.5rem 0 0 0;">The Google Drive connection hasn't been tested in the past hour. Please refresh it in the Admin tab before submitting run checks.</p>
+          <!-- Google OAuth Warning Banner (non-blocking) -->
+          <div x-show="googleOAuthStatus?.configured && !googleOAuthStatus?.isActive" class="oauth-warning-banner" style="margin-bottom: 1rem; padding: 1rem; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px;">
+            <strong>⚠️ Google Drive Disconnected</strong>
+            <p style="margin: 0.5rem 0 0 0;">The Google Drive connection is currently inactive. Run checks will be saved to memory only and may not persist. The backend should automatically reconnect, but you can manually refresh the connection in the Admin tab if this persists.</p>
           </div>
 
           <div class="confirm-container">
@@ -180,25 +180,25 @@ if (appRoot) {
               <div>
                 <div class="oauth-status">
                   <div class="oauth-info">
+                    <div><strong>Status:</strong>
+                      <span x-show="googleOAuthStatus.isActive" style="color: green;">✅ Connected</span>
+                      <span x-show="!googleOAuthStatus.isActive" style="color: orange;">⚠️ Disconnected</span>
+                    </div>
                     <div><strong>Linked by:</strong> <span x-text="googleOAuthStatus.linkedUser?.email"></span></div>
                     <div><strong>Google Account:</strong> <span x-text="googleOAuthStatus.googleEmail"></span></div>
                     <div x-show="googleOAuthStatus.folderId"><strong>Folder:</strong> <span x-text="googleOAuthStatus.folderId"></span></div>
-                    <div><strong>Last Tested:</strong> <span x-text="new Date(googleOAuthStatus.lastTestedAt).toLocaleString()"></span></div>
                   </div>
-                  
-                  <div x-show="googleOAuthStatus.needsRefresh" class="oauth-warning">
-                    ⚠️ Connection not tested in past hour. Please refresh.
-                  </div>
-                  
-                  <div x-show="googleOAuthStatus.tokenExpired" class="oauth-error">
-                    ❌ Token expired. Please refresh connection.
+
+                  <div x-show="!googleOAuthStatus.isActive" class="oauth-warning" style="margin-top: 0.5rem;">
+                    ⚠️ Connection is inactive. The backend will attempt to reconnect automatically. You can manually refresh below.
                   </div>
                 </div>
 
-                <div class="oauth-actions" style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+                <div class="oauth-actions" style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
                   <button class="btn" @click="openGooglePicker">Select Folder</button>
                   <button class="btn" @click="refreshGoogleToken">Refresh Connection</button>
                   <button class="btn-danger" @click="disconnectGoogle">Disconnect</button>
+                  <button class="btn" style="background: #9e9e9e;" @click="testMarkInactive" x-show="user?.isSuperuser">🧪 Test: Force Inactive</button>
                 </div>
               </div>
             </template>

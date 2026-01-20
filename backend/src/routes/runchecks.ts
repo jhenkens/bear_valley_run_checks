@@ -48,6 +48,7 @@ router.post('/runchecks', requireAuth, async (req: AuthRequest, res) => {
     const maxFutureTime = new Date(now.getTime() + 15 * 60 * 1000); // +15 minutes
 
     const savedChecks = [];
+    let allGoogleDriveSaved = true;
 
     for (const check of checks) {
       const { runName, section, patroller, checkTime } = check;
@@ -72,12 +73,16 @@ router.post('/runchecks', requireAuth, async (req: AuthRequest, res) => {
         });
       }
 
-      const savedCheck = await addCheck({
+      const { check: savedCheck, googleDriveSaved } = await addCheck({
         runName,
         section,
         patroller,
         checkTime: checkTimeDate,
       });
+
+      if (!googleDriveSaved) {
+        allGoogleDriveSaved = false;
+      }
 
       savedChecks.push(savedCheck);
     }
@@ -101,7 +106,10 @@ router.post('/runchecks', requireAuth, async (req: AuthRequest, res) => {
       createdAt: Math.floor(check.createdAt.getTime() / 1000),
     }));
 
-    res.json({ checks: checksWithEpoch });
+    res.json({
+      checks: checksWithEpoch,
+      googleDriveSaved: allGoogleDriveSaved
+    });
   } catch (error) {
     logger.error('Error submitting run checks:', error);
     res.status(500).json({ error: 'Internal server error' });

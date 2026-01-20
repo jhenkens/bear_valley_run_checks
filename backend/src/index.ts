@@ -103,7 +103,8 @@ async function startServer() {
     await initializeRunCheckCache();
 
     // OAuth validation scheduler (runs hourly)
-    if (appConfig.runProvider === 'sheets' && process.env.NODE_ENV === 'production') {
+    // This ensures the OAuth token stays fresh and is validated periodically
+    if (appConfig.runProvider === 'sheets') {
       startOAuthValidationScheduler();
     }
 

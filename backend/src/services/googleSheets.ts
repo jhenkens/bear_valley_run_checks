@@ -16,12 +16,6 @@ let dailySpreadsheetId: string = ''; // Today's spreadsheet for checks
 let dailySpreadsheetDate: string = ''; // Track which day's spreadsheet we have
 
 export async function initializeGoogleSheets(): Promise<void> {
-  // Skip in development mode
-  if (process.env.NODE_ENV !== 'production') {
-    logger.debug('Skipping Google Sheets initialization in development mode');
-    return;
-  }
-
   if (appConfig.runProvider !== 'sheets') {
     return;
   }
@@ -30,9 +24,51 @@ export async function initializeGoogleSheets(): Promise<void> {
   logger.info('Google Sheets configured to use OAuth authentication');
 }
 
+/**
+ * Get today's date in the configured timezone (YYYY-MM-DD format)
+ */
 function getTodaySheetName(): string {
-  const today = new Date();
-  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: appConfig.timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+
+  const parts = formatter.formatToParts(now);
+  const year = parts.find(p => p.type === 'year')!.value;
+  const month = parts.find(p => p.type === 'month')!.value;
+  const day = parts.find(p => p.type === 'day')!.value;
+
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Format a date to a string in the configured timezone
+ * Returns format: YYYY-MM-DD HH:MM:SS
+ */
+function formatDateInTimezone(date: Date): string {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: appConfig.timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+
+  const parts = formatter.formatToParts(date);
+  const year = parts.find(p => p.type === 'year')!.value;
+  const month = parts.find(p => p.type === 'month')!.value;
+  const day = parts.find(p => p.type === 'day')!.value;
+  const hour = parts.find(p => p.type === 'hour')!.value;
+  const minute = parts.find(p => p.type === 'minute')!.value;
+  const second = parts.find(p => p.type === 'second')!.value;
+
+  return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
 }
 
 export async function ensureDailySpreadsheet(): Promise<string> {
@@ -122,7 +158,7 @@ export async function ensureDailySpreadsheet(): Promise<string> {
 }
 
 export async function loadTodayChecks(): Promise<RunCheck[]> {
-  if (appConfig.runProvider !== 'sheets' || process.env.NODE_ENV !== 'production') {
+  if (appConfig.runProvider !== 'sheets') {
     return [];
   }
 
@@ -151,32 +187,46 @@ export async function loadTodayChecks(): Promise<RunCheck[]> {
   }
 }
 
-export async function appendRunCheck(check: Omit<RunCheck, 'id' | 'createdAt'>): Promise<void> {
-  if (appConfig.runProvider !== 'sheets' || process.env.NODE_ENV !== 'production') {
-    return;
+export async function appendRunCheck(check: Omit<RunCheck, 'id' | 'createdAt'>): Promise<boolean> {
+  if (appConfig.runProvider !== 'sheets') {
+    // Not using sheets provider, return true (no-op success)
+    return true;
   }
 
-  const { sheets } = await getAuthenticatedSheetsClient();
-  const spreadsheetId = await ensureDailySpreadsheet();
-  const now = new Date().toISOString();
-
   try {
+    const { sheets } = await getAuthenticatedSheetsClient();
+    const spreadsheetId = await ensureDailySpreadsheet();
+
+    // Format timestamps in configured timezone instead of UTC
+    const nowFormatted = formatDateInTimezone(new Date());
+    const checkTimeFormatted = formatDateInTimezone(check.checkTime);
+
     await sheets.spreadsheets.values.append({
       spreadsheetId,
       range: 'Run Checks!A:E',
       valueInputOption: 'RAW',
       requestBody: {
         values: [[
-          now,
-          check.checkTime.toISOString(),
+          nowFormatted,
+          checkTimeFormatted,
           check.section,
           check.runName,
           check.patroller,
         ]],
       },
     });
+
+    logger.info('Successfully saved run check to Google Sheets', {
+      runName: check.runName,
+      section: check.section,
+      patroller: check.patroller
+    });
+
+    return true;
   } catch (error) {
-    logger.error('Error appending check to spreadsheet:', error);
-    throw error;
+    logger.error('Failed to save run check to Google Sheets:', error);
+    // Don't throw - return false to indicate failure
+    // This allows the in-memory cache to still work
+    return false;
   }
 }

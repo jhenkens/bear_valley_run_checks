@@ -11,6 +11,7 @@ declare module 'express-serve-static-core' {
 }
 import { appConfig } from '../config/config';
 import { logger } from '../utils/logger';
+import { scheduleNextRefresh } from '../services/googleOAuth';
 
 const router = Router();
 
@@ -144,6 +145,9 @@ router.get('/oauth/callback', requireAuth, async (req, res) => {
 
     logger.info('OAuth tokens stored successfully', { userId: req.user!.id, googleEmail });
 
+    // Schedule next automatic refresh
+    await scheduleNextRefresh();
+
     // Redirect back to admin panel
     res.redirect('/?tab=admin&oauth=success');
   } catch (error: any) {
@@ -231,9 +235,12 @@ router.post('/oauth/refresh', requireAuth, requireAdmin, async (req, res) => {
       },
     });
 
-    logger.info('OAuth token refreshed', { userId: req.user!.id });
+    logger.info('OAuth token refreshed manually', { userId: req.user!.id });
 
-    res.json({ 
+    // Reschedule the next automatic refresh based on new expiration
+    await scheduleNextRefresh();
+
+    res.json({
       success: true,
       expiresAt,
       lastTestedAt: new Date(),
@@ -263,11 +270,6 @@ router.get('/oauth/status', requireAuth, requireAdmin, async (req, res) => {
       });
     }
 
-    const now = new Date();
-    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-    const needsRefresh = oauth.lastTestedAt < oneHourAgo;
-    const tokenExpired = oauth.tokenExpiresAt < now;
-
     res.json({
       configured: true,
       linkedUser: {
@@ -277,10 +279,7 @@ router.get('/oauth/status', requireAuth, requireAdmin, async (req, res) => {
       googleEmail: oauth.googleEmail,
       folderId: oauth.googleDriveFolderId,
       sheetsId: oauth.googleSheetsId,
-      lastTestedAt: oauth.lastTestedAt,
       tokenExpiresAt: oauth.tokenExpiresAt,
-      needsRefresh,
-      tokenExpired,
       isActive: oauth.isActive,
     });
   } catch (error: any) {
@@ -302,6 +301,34 @@ router.delete('/oauth/disconnect', requireAuth, requireAdmin, async (req, res) =
   } catch (error: any) {
     logger.error('Error disconnecting OAuth:', error);
     res.status(500).json({ error: 'Failed to disconnect OAuth' });
+  }
+});
+
+// POST /api/google/oauth/test-mark-inactive - Testing endpoint to force inactive state
+router.post('/oauth/test-mark-inactive', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const oauth = await prisma.googleOAuth.findFirst({
+      where: { isActive: true },
+    });
+
+    if (!oauth) {
+      return res.status(404).json({ error: 'No active OAuth configuration found' });
+    }
+
+    await prisma.googleOAuth.update({
+      where: { id: oauth.id },
+      data: { isActive: false },
+    });
+
+    logger.info('OAuth manually marked as inactive for testing', { userId: req.user!.id });
+
+    res.json({
+      success: true,
+      message: 'OAuth marked as inactive for testing. Next successful API call will reactivate it.'
+    });
+  } catch (error: any) {
+    logger.error('Error marking OAuth inactive:', error);
+    res.status(500).json({ error: 'Failed to mark OAuth inactive' });
   }
 });
 

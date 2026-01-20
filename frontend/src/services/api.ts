@@ -57,7 +57,7 @@ export const api = {
 
   // Run Checks
   async submitChecks(checks: any[]) {
-    return fetchJSON<{ checks: any[] }>(`${API_BASE}/runchecks`, {
+    return fetchJSON<{ checks: any[]; googleDriveSaved: boolean }>(`${API_BASE}/runchecks`, {
       method: 'POST',
       body: JSON.stringify({ checks }),
     });
@@ -109,6 +109,12 @@ export const api = {
     return fetchJSON<any>(`${API_BASE}/google/oauth/folder`, {
       method: 'POST',
       body: JSON.stringify({ folderId, folderName, sheetsId }),
+    });
+  },
+
+  async testMarkOAuthInactive() {
+    return fetchJSON<{ success: boolean; message: string }>(`${API_BASE}/google/oauth/test-mark-inactive`, {
+      method: 'POST',
     });
   },
 };
