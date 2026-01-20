@@ -66,18 +66,24 @@ if (appRoot) {
         <div class="content" x-show="currentTab === 'runs' && !showConfirm">
           <template x-for="[section, runs] in groupedRuns" :key="section">
             <div class="section-runs">
-              <div class="section-header">
-                <h3 x-text="section"></h3>
+              <div class="section-header" @click="toggleSection(section)" style="cursor: pointer; user-select: none;">
+                <h3>
+                  <span x-text="isSectionExpanded(section) ? '▼' : '▶'" style="display: inline-block; width: 1.2em;"></span>
+                  <span x-text="section"></span>
+                  <span style="font-size: 0.85em; font-weight: normal; margin-left: 0.5rem; color: #666;" x-text="'(' + runs.length + ')'"></span>
+                </h3>
               </div>
-              <template x-for="run in runs" :key="run.name">
-                <div class="run-item" :class="isInCart(run) && 'selected'" @click="toggleRunInCart(run)">
-                  <div class="run-info">
-                    <div class="run-name" x-text="run.name"></div>
-                    <div class="run-time" x-text="formatTimeSince(run.minutesSinceCheck)"></div>
+              <div x-show="isSectionExpanded(section)">
+                <template x-for="run in runs" :key="run.name">
+                  <div class="run-item" :class="isInCart(run) && 'selected'" @click="toggleRunInCart(run)">
+                    <div class="run-info">
+                      <div class="run-name" x-text="run.name"></div>
+                      <div class="run-time" x-text="formatTimeSince(run.minutesSinceCheck)"></div>
+                    </div>
+                    <div class="run-indicator" :class="run.color"></div>
                   </div>
-                  <div class="run-indicator" :class="run.color"></div>
-                </div>
-              </template>
+                </template>
+              </div>
             </div>
           </template>
         </div>
@@ -107,7 +113,8 @@ if (appRoot) {
 
               <div class="form-group">
                 <label>Check Time</label>
-                <input type="datetime-local" x-model="confirmTime">
+                <input type="time" x-model="confirmTime">
+                <small style="color: #666; font-size: 0.85em; display: block; margin-top: 0.25rem;" x-text="'Today, Timezone: ' + timezone"></small>
               </div>
 
               <button class="btn btn-success" @click="submitChecks">Submit</button>

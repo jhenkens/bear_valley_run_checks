@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { createRunProvider } from '../providers';
 import { getChecks, addCheck } from '../services/runCheckCache';
 import { requireAuth, AuthRequest } from '../auth/middleware';
+import { appConfig } from '../config/config';
+import { logger } from '../utils/logger';
 
 const router = Router();
 const runProvider = createRunProvider();
@@ -10,9 +12,9 @@ const runProvider = createRunProvider();
 router.get('/runs', requireAuth, async (req, res) => {
   try {
     const runs = runProvider.getRuns();
-    res.json({ runs });
+    res.json({ runs, timezone: appConfig.timezone });
   } catch (error) {
-    console.error('Error fetching runs:', error);
+    logger.error('Error fetching runs:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -21,9 +23,15 @@ router.get('/runs', requireAuth, async (req, res) => {
 router.get('/runchecks/today', requireAuth, async (req, res) => {
   try {
     const checks = getChecks();
-    res.json({ checks });
+    // Convert dates to epoch seconds for API
+    const checksWithEpoch = checks.map(check => ({
+      ...check,
+      checkTime: Math.floor(check.checkTime.getTime() / 1000),
+      createdAt: Math.floor(check.createdAt.getTime() / 1000),
+    }));
+    res.json({ checks: checksWithEpoch });
   } catch (error) {
-    console.error('Error fetching run checks:', error);
+    logger.error('Error fetching run checks:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -45,11 +53,12 @@ router.post('/runchecks', requireAuth, async (req: AuthRequest, res) => {
     for (const check of checks) {
       const { runName, section, patroller, checkTime } = check;
 
-      if (!runName || !section || !patroller || !checkTime) {
+      if (!runName || !section || !patroller || checkTime === undefined) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
 
-      const checkTimeDate = new Date(checkTime);
+      // Convert epoch seconds to Date
+      const checkTimeDate = new Date(checkTime * 1000);
 
       // Validate check time (now to +15 min)
       if (checkTimeDate > maxFutureTime) {
@@ -74,15 +83,28 @@ router.post('/runchecks', requireAuth, async (req: AuthRequest, res) => {
       savedChecks.push(savedCheck);
     }
 
-    // Emit socket event (will be added in Phase 6)
+    // Emit socket event
     const io = req.app.get('io');
     if (io) {
-      io.emit('runcheck:new', { checks: savedChecks });
+      // Convert to epoch seconds for socket emission
+      const checksWithEpoch = savedChecks.map(check => ({
+        ...check,
+        checkTime: Math.floor(check.checkTime.getTime() / 1000),
+        createdAt: Math.floor(check.createdAt.getTime() / 1000),
+      }));
+      io.emit('runcheck:new', { checks: checksWithEpoch });
     }
 
-    res.json({ checks: savedChecks });
+    // Convert to epoch seconds for response
+    const checksWithEpoch = savedChecks.map(check => ({
+      ...check,
+      checkTime: Math.floor(check.checkTime.getTime() / 1000),
+      createdAt: Math.floor(check.createdAt.getTime() / 1000),
+    }));
+
+    res.json({ checks: checksWithEpoch });
   } catch (error) {
-    console.error('Error submitting run checks:', error);
+    logger.error('Error submitting run checks:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

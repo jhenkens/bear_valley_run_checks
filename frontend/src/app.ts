@@ -26,11 +26,14 @@ export function createApp() {
     newUserEmail: '',
     newUserName: '',
     message: null as { type: 'success' | 'error'; text: string } | null,
+    expandedSections: new Set<string>(),
+    timezone: 'UTC' as string,
 
     // Computed
     get groupedRuns() {
       const runsWithColors = calculateRunColors(this.runs, this.checks);
-      return groupRunsBySection(runsWithColors);
+      const grouped = groupRunsBySection(runsWithColors);
+      return Array.from(grouped.entries());
     },
 
     get groupedChecks() {
@@ -41,7 +44,7 @@ export function createApp() {
         }
         grouped.get(check.section)!.push(check);
       }
-      return grouped;
+      return Array.from(grouped.entries());
     },
 
     get checksByPatroller() {
@@ -52,13 +55,22 @@ export function createApp() {
         }
         grouped.get(check.patroller)!.push(check);
       }
-      return grouped;
+      return Array.from(grouped.entries());
     },
 
     // Init
     async init() {
       try {
         this.loading = true;
+        // Load expanded sections from localStorage
+        const savedSections = localStorage.getItem('expandedSections');
+        if (savedSections) {
+          try {
+            this.expandedSections = new Set(JSON.parse(savedSections));
+          } catch (e) {
+            console.error('Failed to load expanded sections:', e);
+          }
+        }
         await this.checkAuth();
         if (this.user) {
           await this.loadData();
@@ -92,10 +104,11 @@ export function createApp() {
         ]);
 
         this.runs = runsRes.runs;
+        this.timezone = runsRes.timezone || 'UTC';
         this.checks = checksRes.checks.map((c: any) => ({
           ...c,
-          checkTime: new Date(c.checkTime),
-          createdAt: new Date(c.createdAt),
+          checkTime: new Date(c.checkTime * 1000),
+          createdAt: new Date(c.createdAt * 1000),
         }));
         this.patrollers = patrollersRes.patrollers;
         this.filteredPatrollers = patrollersRes.patrollers;
@@ -172,9 +185,13 @@ export function createApp() {
     openConfirm() {
       if (this.cart.length === 0) return;
       this.showConfirm = true;
-      this.confirmPatroller = '';
-      this.confirmTime = new Date().toISOString().slice(0, 16);
-      this.patrollerSearch = '';
+      // Default to logged in user's name
+      const defaultPatroller = this.user?.name || '';
+      this.confirmPatroller = defaultPatroller;
+      this.patrollerSearch = defaultPatroller;
+      // Set time-only to current time (HH:MM format)
+      const now = new Date();
+      this.confirmTime = now.toTimeString().slice(0, 5); // HH:MM
       this.showAutocomplete = false;
     },
 
@@ -192,11 +209,19 @@ export function createApp() {
           return;
         }
 
+        // Parse time (HH:MM) and combine with today's date
+        const [hours, minutes] = this.confirmTime.split(':').map(Number);
+        const checkTimeDate = new Date();
+        checkTimeDate.setHours(hours, minutes, 0, 0);
+        
+        // Convert to epoch seconds
+        const checkTimeEpoch = Math.floor(checkTimeDate.getTime() / 1000);
+
         const checks = this.cart.map(run => ({
           runName: run.name,
           section: run.section,
           patroller: this.confirmPatroller,
-          checkTime: new Date(this.confirmTime).toISOString(),
+          checkTime: checkTimeEpoch,
         }));
 
         await api.submitChecks(checks);
@@ -280,6 +305,20 @@ export function createApp() {
       setTimeout(() => {
         this.message = null;
       }, 3000);
+    },
+
+    toggleSection(section: string) {
+      if (this.expandedSections.has(section)) {
+        this.expandedSections.delete(section);
+      } else {
+        this.expandedSections.add(section);
+      }
+      // Save to localStorage
+      localStorage.setItem('expandedSections', JSON.stringify(Array.from(this.expandedSections)));
+    },
+
+    isSectionExpanded(section: string) {
+      return this.expandedSections.has(section);
     },
 
     formatTimeSince,

@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { getAllPatrollers } from '../services/patrollerService';
-import { requireAuth } from '../auth/middleware';
-
+import { requireAuth } from '../auth/middleware';import { logger } from '../utils/logger';
 const router = Router();
 
 // GET /api/patrollers - Get all patroller names
@@ -10,7 +9,7 @@ router.get('/patrollers', requireAuth, async (req, res) => {
     const patrollers = await getAllPatrollers();
     res.json({ patrollers });
   } catch (error) {
-    console.error('Error fetching patrollers:', error);
+    logger.error('Error fetching patrollers:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

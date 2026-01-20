@@ -25,6 +25,7 @@ export interface AppConfig {
   patrollers: string[];
   enableLoginWithoutPassword: boolean;
   disableMagicLink: boolean;
+  timezone: string;
   env: {
     databaseUrl: string;
     sessionSecret: string;
@@ -62,6 +63,7 @@ function loadConfig(): AppConfig {
     patrollers: config.get<string[]>('patrollers'),
     enableLoginWithoutPassword: config.get<boolean>('enableLoginWithoutPassword'),
     disableMagicLink: config.get<boolean>('disableMagicLink'),
+    timezone: config.get<string>('timezone'),
     env: {
       databaseUrl: process.env.DATABASE_URL || 'file:./dev.db',
       sessionSecret: process.env.SESSION_SECRET || 'change-this-secret',

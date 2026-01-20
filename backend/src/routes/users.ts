@@ -5,6 +5,7 @@ import { sendWelcomeEmail } from '../services/email';
 import { requireAdmin, AuthRequest } from '../auth/middleware';
 import { isSuperuser } from '../services/patrollerService';
 import { appConfig } from '../config/config';
+import { logger } from '../utils/logger';
 
 const router = Router();
 
@@ -32,7 +33,7 @@ router.get('/users', requireAdmin, async (req, res) => {
 
     res.json({ users: usersWithSuperuser });
   } catch (error) {
-    console.error('Error fetching users:', error);
+    logger.error('Error fetching users:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -79,7 +80,7 @@ router.post('/users', requireAdmin, async (req, res) => {
         emailSent = true;
         message = 'User created and welcome email sent';
       } catch (emailError) {
-        console.error('Failed to send welcome email:', emailError);
+        logger.error('Failed to send welcome email:', emailError);
         message = 'User created (email sending failed - please check SMTP configuration)';
       }
     } else {
@@ -94,7 +95,7 @@ router.post('/users', requireAdmin, async (req, res) => {
       message,
     });
   } catch (error) {
-    console.error('Error creating user:', error);
+    logger.error('Error creating user:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -135,7 +136,7 @@ router.patch('/users/:id/admin', requireAdmin, async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Error updating user admin status:', error);
+    logger.error('Error updating user admin status:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -165,7 +166,7 @@ router.delete('/users/:id', requireAdmin, async (req, res) => {
 
     res.json({ message: 'User deleted successfully' });
   } catch (error) {
-    console.error('Error deleting user:', error);
+    logger.error('Error deleting user:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

@@ -1,5 +1,6 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { Server as HTTPServer } from 'http';
+import { logger } from '../utils/logger';
 
 export function setupSocket(server: HTTPServer): SocketIOServer {
   const io = new SocketIOServer(server, {
@@ -12,10 +13,10 @@ export function setupSocket(server: HTTPServer): SocketIOServer {
   });
 
   io.on('connection', (socket) => {
-    console.log('Client connected:', socket.id);
+    logger.info('Client connected:', socket.id);
 
     socket.on('disconnect', () => {
-      console.log('Client disconnected:', socket.id);
+      logger.info('Client disconnected:', socket.id);
     });
   });
 

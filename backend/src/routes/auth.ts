@@ -4,6 +4,7 @@ import { generateMagicLink, validateToken } from '../auth/magicLink';
 import { sendMagicLink } from '../services/email';
 import { requireAuth, AuthRequest } from '../auth/middleware';
 import { appConfig } from '../config/config';
+import { logger } from '../utils/logger';
 
 const router = Router();
 
@@ -38,7 +39,7 @@ if (appConfig.enableLoginWithoutPassword) {
         }
       });
     } catch (error) {
-      console.error('Dev login error:', error);
+      logger.error('Dev login error:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
@@ -71,7 +72,7 @@ router.post('/login', async (req, res) => {
         await sendMagicLink(email.toLowerCase(), token);
         res.json({ message: 'Magic link sent to your email' });
       } catch (emailError) {
-        console.error('Failed to send magic link email:', emailError);
+        logger.error('Failed to send magic link email:', emailError);
         res.status(500).json({ error: 'Failed to send email. Please contact an administrator.' });
       }
     } else {
@@ -83,7 +84,7 @@ router.post('/login', async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('Login error:', error);
+    logger.error('Login error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -117,7 +118,7 @@ router.get('/verify', async (req, res) => {
     // Redirect to main app
     res.redirect('/');
   } catch (error) {
-    console.error('Verify error:', error);
+    logger.error('Verify error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

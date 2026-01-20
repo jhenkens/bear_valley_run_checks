@@ -52,7 +52,7 @@ export const api = {
 
   // Runs
   async getRuns() {
-    return fetchJSON<{ runs: any[] }>(`${API_BASE}/runs`);
+    return fetchJSON<{ runs: any[]; timezone: string }>(`${API_BASE}/runs`);
   },
 
   // Run Checks
