@@ -8,3 +8,54 @@ enableLoginWithoutPassword: true
 # Disable sending magic link emails
 # When true, login/user creation will return tokens directly in the response
 disableMagicLink: true
+
+# Patrollers who don't have accounts yet
+patrollers:
+  - John Doe
+  - Jane Smith
+  - Mike Wilson
+  - Sarah Johnson
+
+# Runs organized by section
+runs:
+  - section: Grizzly
+    runs:
+      - Grizzly (Upper)
+      - Grizzly (Lower)
+      - Bear Cub
+      - Koala
+      - Teddy Bear
+      - Ursa
+
+  - section: Kodiak
+    runs:
+      - Kodiak
+      - Cub Way
+      - Smokey
+      - Honey Bear
+      - Black Bear
+
+  - section: Pooh Bear
+    runs:
+      - Pooh Bear (Upper)
+      - Pooh Bear (Lower)
+      - Goldilocks
+      - Mama Bear
+      - Papa Bear
+
+  - section: Valley Express
+    runs:
+      - Mokelumne
+      - Stanislaus
+      - Sierra Summit
+      - Valley Express (Catwalk)
+      - Valley Express (Lower)
+
+  - section: Expansion
+    runs:
+      - Liberty Bowl
+      - Geronimo
+      - Apache
+      - Sitting Bull
+      - Cochise
+      - Crazy Horse
