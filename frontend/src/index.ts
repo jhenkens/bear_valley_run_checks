@@ -166,8 +166,8 @@ if (appRoot) {
 
         <!-- Admin Tab -->
         <div class="content" x-show="currentTab === 'admin'">
-          <!-- Google Drive OAuth Section -->
-          <div class="confirm-list" style="margin-bottom: 2rem;">
+          <!-- Google Drive OAuth Section (Superuser only) -->
+          <div class="confirm-list" style="margin-bottom: 2rem;" x-show="user?.isSuperuser">
             <h3>Google Drive Connection</h3>
             
             <template x-if="!googleOAuthStatus?.configured">
