@@ -48,7 +48,7 @@ export async function initializeGoogleSheets(): Promise<void> {
     },
     scopes: [
       'https://www.googleapis.com/auth/spreadsheets',
-      'https://www.googleapis.com/auth/drive'
+      'https://www.googleapis.com/auth/drive.file'
     ],
   });
 
@@ -99,29 +99,34 @@ export async function ensureDailySpreadsheet(): Promise<string> {
       return dailySpreadsheetId;
     }
 
-    // Create new spreadsheet
-    const createResponse = await sheets.spreadsheets.create({
+    // Create new spreadsheet directly in the folder using Drive API
+    const createResponse = await drive.files.create({
       requestBody: {
-        properties: {
-          title: today,
-        },
-        sheets: [
+        name: today,
+        mimeType: 'application/vnd.google-apps.spreadsheet',
+        parents: [appConfig.googleDriveFolderId],
+      },
+      fields: 'id',
+    });
+
+    const newSpreadsheetId = createResponse.data.id;
+
+    // Add "Run Checks" sheet and format it
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: newSpreadsheetId,
+      requestBody: {
+        requests: [
           {
-            properties: {
-              title: 'Run Checks',
+            updateSheetProperties: {
+              properties: {
+                sheetId: 0,
+                title: 'Run Checks',
+              },
+              fields: 'title',
             },
           },
         ],
       },
-    });
-
-    const newSpreadsheetId = createResponse.data.spreadsheetId;
-
-    // Move to the specified folder
-    await drive.files.update({
-      fileId: newSpreadsheetId,
-      addParents: appConfig.googleDriveFolderId,
-      fields: 'id, parents',
     });
 
     // Add headers
