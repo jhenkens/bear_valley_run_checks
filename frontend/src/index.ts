@@ -19,11 +19,26 @@ if (appRoot) {
       <!-- Login -->
       <div x-show="!loading && !user" class="login-container">
         <h2>Bear Valley Run Checks</h2>
+
+        <!-- DEV Mode Login -->
+        <div x-show="isDev" style="margin-bottom: 1rem; padding: 1rem; background: #fff3cd; border-radius: 4px; border: 1px solid #ffc107;">
+          <strong>⚡ DEV MODE</strong>
+          <p style="margin: 0.5rem 0; font-size: 0.9rem;">Direct login enabled - no email required</p>
+        </div>
+
         <div class="form-group">
           <label>Email</label>
-          <input type="email" x-model="loginEmail" @keyup.enter="login" placeholder="your@email.com">
+          <input type="email" x-model="loginEmail" @keyup.enter="isDev ? devLogin() : login()" placeholder="your@email.com">
         </div>
-        <button class="btn" @click="login" :disabled="!loginEmail">Send Login Link</button>
+
+        <button x-show="isDev" class="btn" @click="devLogin" :disabled="!loginEmail" style="background: #28a745;">
+          Login (DEV - No Email)
+        </button>
+
+        <button x-show="!isDev" class="btn" @click="login" :disabled="!loginEmail">
+          Send Login Link
+        </button>
+
         <div x-show="loginMessage" class="message success" x-text="loginMessage" style="margin-top: 1rem;"></div>
         <div x-show="error" class="message error" x-text="error" style="margin-top: 1rem;"></div>
       </div>

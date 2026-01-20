@@ -5,6 +5,7 @@ import { calculateRunColors, groupRunsBySection, formatTimeSince, RunWithColor }
 export function createApp() {
   return {
     // State
+    isDev: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1',
     loading: true,
     error: null as string | null,
     user: null as any,
@@ -109,6 +110,18 @@ export function createApp() {
     },
 
     // Auth
+    async devLogin() {
+      try {
+        this.error = null;
+        this.loginMessage = '';
+        await api.devLogin(this.loginEmail);
+        // Reload to get authenticated session
+        window.location.reload();
+      } catch (err: any) {
+        this.error = err.message || 'Login failed';
+      }
+    },
+
     async login() {
       try {
         this.error = null;

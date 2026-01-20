@@ -28,6 +28,13 @@ async function fetchJSON<T>(url: string, options: RequestInit = {}): Promise<T> 
 
 export const api = {
   // Auth
+  async devLogin(email: string) {
+    return fetchJSON<{ message: string; user: any }>(`${AUTH_BASE}/dev-login`, {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  },
+
   async login(email: string) {
     return fetchJSON<{ message: string }>(`${AUTH_BASE}/login`, {
       method: 'POST',

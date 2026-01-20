@@ -2,12 +2,15 @@ import express from 'express';
 import cors from 'cors';
 import http from 'http';
 import path from 'path';
+import morgan from 'morgan';
 import { config } from './config/config';
 import { createSessionMiddleware } from './auth/session';
 import { setupSocket } from './socket/runCheckSocket';
 import { createRunProvider } from './providers';
 import { initialize as initializeRunCheckCache } from './services/runCheckCache';
 import { initializeGoogleSheets } from './services/googleSheets';
+import { syncSuperusers } from './services/superuserService';
+import { logger } from './utils/logger';
 
 // Import routes
 import authRoutes from './routes/auth';
@@ -29,6 +32,17 @@ app.use(cors({
     : ['http://localhost:8080', 'http://localhost:3000'],
   credentials: true,
 }));
+
+// HTTP request logging
+// In development, use 'dev' format which is colored and detailed
+// In production, use 'combined' format which is Apache-style
+const morganFormat = process.env.NODE_ENV === 'production' ? 'combined' : 'dev';
+app.use(morgan(morganFormat, {
+  stream: {
+    write: (message: string) => logger.http(message.trim())
+  }
+}));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(createSessionMiddleware());
@@ -55,16 +69,25 @@ app.get('/health', (req, res) => {
 // Initialize application
 async function startServer() {
   try {
-    console.log('Starting Bear Valley Run Checks Backend...');
-    console.log(`Run Provider: ${config.runProvider}`);
+    logger.info('Starting Bear Valley Run Checks Backend...');
+    logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    logger.info(`Run Provider: ${config.runProvider}`);
+
+    // Sync superusers from config.yaml to database
+    await syncSuperusers();
 
     // Initialize run provider
     const runProvider = createRunProvider();
     await runProvider.initialize();
 
-    // Initialize Google Sheets if configured
-    if (config.runProvider === 'sheets') {
+    // Initialize Google Sheets only in production or when explicitly using sheets provider
+    // In development, we skip Google Sheets to avoid external dependencies
+    if (config.runProvider === 'sheets' && process.env.NODE_ENV === 'production') {
       await initializeGoogleSheets();
+      logger.info('Google Sheets integration enabled');
+    } else if (config.runProvider === 'sheets') {
+      logger.warn('Google Sheets provider configured but skipped in development mode');
+      logger.warn('Run checks will be stored in memory only');
     }
 
     // Initialize run check cache
@@ -73,29 +96,33 @@ async function startServer() {
     // Start server
     const port = config.env.port;
     server.listen(port, () => {
-      console.log(`Server running on port ${port}`);
-      console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`Superusers: ${config.superusers.join(', ')}`);
+      logger.info(`🚀 Server running on port ${port}`);
+      logger.info(`📧 Superusers: ${config.superusers.map(su => su.email).join(', ')}`);
+
+      if (process.env.NODE_ENV !== 'production') {
+        logger.info('⚡ DEV MODE: Direct login available at POST /auth/dev-login');
+        logger.info('   No magic links or email setup required!');
+      }
     });
   } catch (error) {
-    console.error('Failed to start server:', error);
+    logger.error('Failed to start server:', error);
     process.exit(1);
   }
 }
 
 // Handle shutdown
 process.on('SIGTERM', async () => {
-  console.log('SIGTERM received, shutting down gracefully');
+  logger.info('SIGTERM received, shutting down gracefully');
   server.close(() => {
-    console.log('Server closed');
+    logger.info('Server closed');
     process.exit(0);
   });
 });
 
 process.on('SIGINT', async () => {
-  console.log('SIGINT received, shutting down gracefully');
+  logger.info('SIGINT received, shutting down gracefully');
   server.close(() => {
-    console.log('Server closed');
+    logger.info('Server closed');
     process.exit(0);
   });
 });

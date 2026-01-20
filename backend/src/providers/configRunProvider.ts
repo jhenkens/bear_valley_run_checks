@@ -1,5 +1,6 @@
 import { IRunProvider } from './runProvider';
 import { Run, config } from '../config/config';
+import { logger } from '../utils/logger';
 
 export class ConfigRunProvider implements IRunProvider {
   private runs: Run[];
@@ -9,7 +10,7 @@ export class ConfigRunProvider implements IRunProvider {
   }
 
   async initialize(): Promise<void> {
-    console.log(`ConfigRunProvider initialized with ${this.runs.length} runs`);
+    logger.info(`ConfigRunProvider initialized with ${this.runs.length} runs`);
   }
 
   getRuns(): Run[] {

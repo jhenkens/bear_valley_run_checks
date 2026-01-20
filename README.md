@@ -2,6 +2,8 @@
 
 Mobile-first web application for ski patrol to track run checks with real-time updates.
 
+**🚀 [Quick Start Guide](QUICKSTART.md)** - Get running in under 2 minutes with zero external dependencies!
+
 ## Features
 
 - **Magic Link Authentication** - Passwordless email login
@@ -25,6 +27,16 @@ Mobile-first web application for ski patrol to track run checks with real-time u
 
 - Node.js 18+ (Node.js 20+ recommended for production)
 - npm or yarn
+
+### Quick Start (Development - No External Dependencies Required!)
+
+The application runs in development mode by default with **zero external dependencies**:
+- ✅ No email/SMTP setup required
+- ✅ No Google Sheets API setup required
+- ✅ Direct login without magic links
+- ✅ Superusers auto-created from config.yaml
+
+Simply install and run - that's it!
 
 ### Installation
 
@@ -50,7 +62,8 @@ Mobile-first web application for ski patrol to track run checks with real-time u
    ```bash
    cd ../backend
    cp .env.example .env
-   # Edit .env with your configuration
+   # For development, the defaults work! No changes needed.
+   # For production, edit .env with your SMTP and other settings
    ```
 
 5. Initialize the database:
@@ -58,6 +71,10 @@ Mobile-first web application for ski patrol to track run checks with real-time u
    npx prisma migrate dev --name init
    npx prisma generate
    ```
+
+6. **(Optional)** Customize superusers:
+   - Edit `backend/config.yaml` to add/modify superusers
+   - Superusers are automatically created in the database on server startup
 
 ### Development
 
@@ -74,6 +91,34 @@ npm run dev
 ```
 
 Access the application at http://localhost:8080
+
+**First Login:**
+1. Enter any superuser email from `config.yaml` (default: admin@bearvalley.com)
+2. Click "Login (DEV - No Email)"
+3. You're in! No magic link required.
+
+## Development Mode Features
+
+When `NODE_ENV` is not set to `production`, the application enables several developer-friendly features:
+
+### 🔓 Direct Login (No Email Required)
+- Bypass magic link authentication
+- Login instantly with any user email in the database
+- No SMTP configuration needed
+- Look for the green "Login (DEV - No Email)" button
+
+### 👥 Auto-Created Superusers
+- Superusers defined in `config.yaml` are automatically created/updated in the database on startup
+- No manual database setup required
+- Names are synced from config on every restart
+
+### 📊 In-Memory Run Checks
+- Google Sheets integration is disabled in DEV mode
+- Run checks stored in memory only (reset on server restart)
+- No Google API credentials needed
+
+### 🎯 Zero External Dependencies
+Perfect for development, testing, and learning the codebase without any external service setup.
 
 ### Production Deployment
 

@@ -15,10 +15,15 @@ export interface RunSection {
   runs: string[];
 }
 
+export interface Superuser {
+  email: string;
+  name: string;
+}
+
 export interface AppConfig {
   runProvider: 'config' | 'sheets';
   runs: Run[];
-  superusers: string[];
+  superusers: Superuser[];
   patrollers: string[];
   env: {
     databaseUrl: string;
@@ -43,7 +48,7 @@ function loadConfig(): AppConfig {
   const configYaml = yaml.load(configFile) as {
     runProvider: 'config' | 'sheets';
     runs?: RunSection[];
-    superusers?: string[];
+    superusers?: Array<{ email: string; name: string }>;
     patrollers?: string[];
   };
 

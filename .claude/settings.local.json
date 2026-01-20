@@ -5,7 +5,13 @@
       "Bash(npm install:*)",
       "Bash(npx prisma migrate:*)",
       "Bash(npx prisma generate:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(ls:*)",
+      "Bash(npx prisma db push:*)",
+      "Bash(git checkout:*)",
+      "Bash(sqlite3:*)",
+      "Bash(timeout 5 npm run dev:*)",
+      "Bash(chmod:*)"
     ]
   }
 }

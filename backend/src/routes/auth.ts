@@ -3,9 +3,45 @@ import { getPrismaClient } from '../config/database';
 import { generateMagicLink, validateToken } from '../auth/magicLink';
 import { sendMagicLink } from '../services/email';
 import { requireAuth, AuthRequest } from '../auth/middleware';
-import { config } from '../config/config';
 
 const router = Router();
+
+// POST /auth/dev-login - DEV ONLY: Direct login without magic link
+if (process.env.NODE_ENV !== 'production') {
+  router.post('/dev-login', async (req, res) => {
+    try {
+      const { email } = req.body;
+
+      if (!email || typeof email !== 'string') {
+        return res.status(400).json({ error: 'Email is required' });
+      }
+
+      const prisma = getPrismaClient();
+      const user = await prisma.user.findUnique({
+        where: { email: email.toLowerCase() },
+      });
+
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      // Create session directly without magic link
+      req.session.userId = user.id;
+
+      res.json({
+        message: 'Logged in successfully (DEV MODE)',
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+        }
+      });
+    } catch (error) {
+      console.error('Dev login error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+}
 
 // POST /auth/login - Request magic link
 router.post('/login', async (req, res) => {

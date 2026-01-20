@@ -1,5 +1,6 @@
 import { IRunProvider } from './runProvider';
 import { Run } from '../config/config';
+import { logger } from '../utils/logger';
 
 export class SheetsRunProvider implements IRunProvider {
   private runs: Run[] = [];
@@ -7,7 +8,7 @@ export class SheetsRunProvider implements IRunProvider {
   async initialize(): Promise<void> {
     // TODO: Implement Google Sheets integration
     // This will load the run list from a Google Sheets template
-    console.log('SheetsRunProvider initialized (stub implementation)');
+    logger.info('SheetsRunProvider initialized (stub implementation)');
   }
 
   getRuns(): Run[] {

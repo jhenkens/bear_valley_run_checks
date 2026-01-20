@@ -1,8 +1,12 @@
 runProvider: config
 
 # Superusers (always have admin access, cannot be demoted or deleted)
+# Auto-populated in database on startup
 superusers:
-  - admin@example.com
+  - email: admin@bearvalley.com
+    name: Admin User
+  - email: patrol@bearvalley.com
+    name: Patrol Lead
 
 # Patrollers who don't have accounts yet
 patrollers:

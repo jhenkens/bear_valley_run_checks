@@ -1,5 +1,6 @@
 import { google } from 'googleapis';
 import { config } from '../config/config';
+import { logger } from '../utils/logger';
 
 export interface RunCheck {
   id: string;
@@ -14,6 +15,12 @@ let sheets: any = null;
 let spreadsheetId: string = '';
 
 export async function initializeGoogleSheets(): Promise<void> {
+  // Skip in development mode
+  if (process.env.NODE_ENV !== 'production') {
+    logger.debug('Skipping Google Sheets initialization in development mode');
+    return;
+  }
+
   if (config.runProvider !== 'sheets') {
     return;
   }
@@ -33,7 +40,7 @@ export async function initializeGoogleSheets(): Promise<void> {
   sheets = google.sheets({ version: 'v4', auth });
   spreadsheetId = config.env.googleSheetsId;
 
-  console.log('Google Sheets API initialized');
+  logger.info('Google Sheets API initialized');
 }
 
 function getTodaySheetName(): string {
@@ -81,18 +88,18 @@ export async function ensureDailySheet(): Promise<string> {
         },
       });
 
-      console.log(`Created daily sheet: ${sheetName}`);
+      logger.info(`Created daily sheet: ${sheetName}`);
     }
 
     return sheetName;
   } catch (error) {
-    console.error('Error ensuring daily sheet:', error);
+    logger.error('Error ensuring daily sheet:', error);
     throw error;
   }
 }
 
 export async function loadTodayChecks(): Promise<RunCheck[]> {
-  if (config.runProvider !== 'sheets') {
+  if (config.runProvider !== 'sheets' || process.env.NODE_ENV !== 'production') {
     return [];
   }
 
@@ -114,13 +121,13 @@ export async function loadTodayChecks(): Promise<RunCheck[]> {
       createdAt: new Date(row[0]),
     }));
   } catch (error) {
-    console.error('Error loading checks from sheet:', error);
+    logger.error('Error loading checks from sheet:', error);
     return [];
   }
 }
 
 export async function appendRunCheck(check: Omit<RunCheck, 'id' | 'createdAt'>): Promise<void> {
-  if (config.runProvider !== 'sheets') {
+  if (config.runProvider !== 'sheets' || process.env.NODE_ENV !== 'production') {
     return;
   }
 
@@ -143,7 +150,7 @@ export async function appendRunCheck(check: Omit<RunCheck, 'id' | 'createdAt'>):
       },
     });
   } catch (error) {
-    console.error('Error appending check to sheet:', error);
+    logger.error('Error appending check to sheet:', error);
     throw error;
   }
 }

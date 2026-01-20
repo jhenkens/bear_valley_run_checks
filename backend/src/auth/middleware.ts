@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { getPrismaClient } from '../config/database';
-import { config } from '../config/config';
+import { isSuperuser } from '../services/superuserService';
 
 declare module 'express-session' {
   interface SessionData {
@@ -38,14 +38,14 @@ export async function requireAuth(
     return;
   }
 
-  const isSuperuser = config.superusers.includes(user.email);
+  const userIsSuperuser = isSuperuser(user.email);
 
   req.user = {
     id: user.id,
     email: user.email,
     name: user.name,
-    isAdmin: user.isAdmin || isSuperuser,
-    isSuperuser,
+    isAdmin: user.isAdmin || userIsSuperuser,
+    isSuperuser: userIsSuperuser,
   };
 
   next();

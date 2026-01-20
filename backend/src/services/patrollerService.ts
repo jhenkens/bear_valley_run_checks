@@ -1,5 +1,6 @@
 import { getPrismaClient } from '../config/database';
 import { config } from '../config/config';
+import { isSuperuser } from './superuserService';
 
 export async function getAllPatrollers(): Promise<string[]> {
   const prisma = getPrismaClient();
@@ -17,6 +18,4 @@ export async function getAllPatrollers(): Promise<string[]> {
   return allPatrollers.sort((a, b) => a.localeCompare(b));
 }
 
-export function isSuperuser(email: string): boolean {
-  return config.superusers.includes(email);
-}
+export { isSuperuser };
