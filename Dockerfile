@@ -12,6 +12,9 @@ RUN npm run build
 # Stage 2: Build backend
 FROM node:20-alpine AS backend-builder
 
+# Install OpenSSL for Prisma
+RUN apk add --no-cache openssl
+
 WORKDIR /app/backend
 
 COPY backend/package*.json ./
@@ -19,10 +22,14 @@ RUN npm install
 
 COPY backend/ ./
 RUN npx prisma generate
-RUN npm run build
+# Increase Node memory limit for TypeScript compilation
+RUN NODE_OPTIONS="--max-old-space-size=2048" npm run build
 
 # Stage 3: Production
 FROM node:20-alpine
+
+# Install OpenSSL for Prisma
+RUN apk add --no-cache openssl
 
 WORKDIR /app
 
@@ -40,8 +47,8 @@ COPY --from=backend-builder /app/backend/node_modules/@prisma ./node_modules/@pr
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 COPY --from=frontend-builder /app/frontend/public ./frontend/public
 
-# Copy config
-COPY backend/config.yaml ./config.yaml
+# Copy config directory (not just config.yaml)
+COPY backend/config ./config
 COPY backend/.env.example ./.env.example
 
 # Create data directory for SQLite and sessions

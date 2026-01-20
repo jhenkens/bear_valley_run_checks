@@ -9,7 +9,7 @@ services:
       - backend/.env
     volumes:
       - ./data:/app/data
-      - ./backend/config.yaml:/app/config.yaml
+      - ./backend/config:/app/config
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
