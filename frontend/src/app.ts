@@ -61,7 +61,8 @@ export function createApp() {
         }
         grouped.get(check.patroller)!.push(check);
       }
-      return Array.from(grouped.entries());
+      // Sort by patroller name alphabetically
+      return Array.from(grouped.entries()).sort((a, b) => a[0].localeCompare(b[0]));
     },
 
     // Init

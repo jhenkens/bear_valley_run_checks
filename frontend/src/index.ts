@@ -136,13 +136,21 @@ if (appRoot) {
         <div class="content" x-show="currentTab === 'history'">
           <template x-for="[section, sectionChecks] in groupedChecks" :key="section">
             <div class="history-section">
-              <h3 x-text="section"></h3>
-              <template x-for="check in sectionChecks" :key="check.id">
-                <div class="history-item">
-                  <div class="history-run" x-text="check.runName"></div>
-                  <div class="history-details" x-text="new Date(check.checkTime).toLocaleTimeString() + ' - ' + check.patroller"></div>
-                </div>
-              </template>
+              <div class="section-header" @click="toggleSection('history-' + section)" style="cursor: pointer; user-select: none;">
+                <h3>
+                  <span x-text="isSectionExpanded('history-' + section) ? '▼' : '▶'" style="display: inline-block; width: 1.2em;"></span>
+                  <span x-text="section"></span>
+                  <span style="font-size: 0.85em; font-weight: normal; margin-left: 0.5rem; color: #666;" x-text="'(' + sectionChecks.length + ')'"></span>
+                </h3>
+              </div>
+              <div x-show="isSectionExpanded('history-' + section)">
+                <template x-for="check in sectionChecks" :key="check.id">
+                  <div class="history-item">
+                    <div class="history-run" x-text="check.runName"></div>
+                    <div class="history-details" x-text="new Date(check.checkTime).toLocaleTimeString() + ' - ' + check.patroller"></div>
+                  </div>
+                </template>
+              </div>
             </div>
           </template>
           <div x-show="checks.length === 0" class="message">No checks today</div>
@@ -152,13 +160,21 @@ if (appRoot) {
         <div class="content" x-show="currentTab === 'patrollers'">
           <template x-for="[patroller, patrollerChecks] in checksByPatroller" :key="patroller">
             <div class="history-section">
-              <h3 x-text="patroller"></h3>
-              <template x-for="check in patrollerChecks" :key="check.id">
-                <div class="history-item">
-                  <div class="history-run" x-text="check.runName + ' (' + check.section + ')'"></div>
-                  <div class="history-details" x-text="new Date(check.checkTime).toLocaleTimeString()"></div>
-                </div>
-              </template>
+              <div class="section-header" @click="toggleSection('patroller-' + patroller)" style="cursor: pointer; user-select: none;">
+                <h3>
+                  <span x-text="isSectionExpanded('patroller-' + patroller) ? '▼' : '▶'" style="display: inline-block; width: 1.2em;"></span>
+                  <span x-text="patroller"></span>
+                  <span style="font-size: 0.85em; font-weight: normal; margin-left: 0.5rem; color: #666;" x-text="'(' + patrollerChecks.length + ')'"></span>
+                </h3>
+              </div>
+              <div x-show="isSectionExpanded('patroller-' + patroller)">
+                <template x-for="check in patrollerChecks" :key="check.id">
+                  <div class="history-item">
+                    <div class="history-run" x-text="check.runName + ' (' + check.section + ')'"></div>
+                    <div class="history-details" x-text="new Date(check.checkTime).toLocaleTimeString()"></div>
+                  </div>
+                </template>
+              </div>
             </div>
           </template>
           <div x-show="checks.length === 0" class="message">No checks today</div>
