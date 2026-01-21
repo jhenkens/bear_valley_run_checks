@@ -34,6 +34,7 @@ export function createApp() {
     googleOAuthStatus: null as any,
     googleDriveWasDisconnected: false, // Track if we showed a disconnection warning
     _initialized: false, // Guard against double initialization
+    lastUpdated: null as Date | null, // Track last data update
 
     // Computed
     get groupedRuns() {
@@ -51,6 +52,45 @@ export function createApp() {
         grouped.get(check.section)!.push(check);
       }
       return Array.from(grouped.entries());
+    },
+
+    get historyBySection() {
+      // Create a map of all runs by section, including those with no checks
+      const sectionMap = new Map<string, Array<{ runName: string; checks: any[] }>>();
+
+      // First, initialize with all runs from the runs list
+      for (const [section, runs] of this.groupedRuns) {
+        if (!sectionMap.has(section)) {
+          sectionMap.set(section, []);
+        }
+        for (const run of runs) {
+          sectionMap.get(section)!.push({
+            runName: run.name,
+            checks: []
+          });
+        }
+      }
+
+      // Then, populate with checks
+      for (const check of this.checks) {
+        const section = sectionMap.get(check.section);
+        if (section) {
+          const run = section.find(r => r.runName === check.runName);
+          if (run) {
+            run.checks.push(check);
+          }
+        }
+      }
+
+      // Sort checks within each run by checkTime (oldest first, newest last)
+      for (const section of sectionMap.values()) {
+        for (const run of section) {
+          run.checks.sort((a, b) => new Date(a.checkTime).getTime() - new Date(b.checkTime).getTime());
+        }
+      }
+
+      // Return as array maintaining section order from groupedRuns
+      return Array.from(sectionMap.entries());
     },
 
     get checksByPatroller() {
@@ -87,7 +127,8 @@ export function createApp() {
         await this.checkAuth();
         if (this.user) {
           await this.loadData();
-          connectSocket(this.handleNewCheck.bind(this));
+          connectSocket(this.handleNewCheck.bind(this), this.handleSocketReconnect.bind(this));
+          this.setupVisibilityListener();
         }
       } catch (err: any) {
         console.error('Init error:', err);
@@ -122,6 +163,7 @@ export function createApp() {
         }));
         this.patrollers = statusRes.patrollers;
         this.filteredPatrollers = statusRes.patrollers;
+        this.lastUpdated = new Date(); // Update last refresh time
 
         if (this.user.isAdmin) {
           const usersRes = await api.getUsers();
@@ -389,7 +431,35 @@ export function createApp() {
 
     // Socket
     handleNewCheck(data: any) {
-      this.loadData(); // Reload data to get fresh checks
+      // Deduplicate: only reload if we don't have these checks already
+      if (data.checks && Array.isArray(data.checks)) {
+        const hasNewCheck = data.checks.some((newCheck: any) =>
+          !this.checks.some(existingCheck => existingCheck.id === newCheck.id)
+        );
+        if (hasNewCheck) {
+          this.lastUpdated = new Date(); // Update last refresh time
+          this.loadData(); // Reload data to get fresh checks
+        }
+      } else {
+        this.lastUpdated = new Date(); // Update last refresh time
+        this.loadData();
+      }
+    },
+
+    handleSocketReconnect() {
+      // On socket reconnect, refresh all data to catch any missed updates
+      console.log('Socket reconnected, refreshing data...');
+      this.loadData();
+    },
+
+    setupVisibilityListener() {
+      // Refresh data when user returns to the tab
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && this.user) {
+          console.log('Tab became visible, refreshing data...');
+          this.loadData();
+        }
+      });
     },
 
     // Helpers

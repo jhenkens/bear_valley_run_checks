@@ -47,7 +47,12 @@ if (appRoot) {
       <div x-show="!loading && user">
         <!-- Header -->
         <div class="header">
-          <h1>Bear Valley Run Checks</h1>
+          <div>
+            <h1>Bear Valley Run Checks</h1>
+            <div x-show="lastUpdated" style="font-size: 0.75em; color: #e0e0e0; margin-top: 0.25rem;">
+              Last updated: <span x-text="lastUpdated ? lastUpdated.toLocaleTimeString() : ''"></span>
+            </div>
+          </div>
           <button @click="logout">Logout</button>
         </div>
 
@@ -134,26 +139,31 @@ if (appRoot) {
 
         <!-- History Tab -->
         <div class="content" x-show="currentTab === 'history'">
-          <template x-for="[section, sectionChecks] in groupedChecks" :key="section">
-            <div class="history-section">
+          <template x-for="[section, runs] in historyBySection" :key="section">
+            <div class="section-runs">
               <div class="section-header" @click="toggleSection('history-' + section)" style="cursor: pointer; user-select: none;">
                 <h3>
                   <span x-text="isSectionExpanded('history-' + section) ? '▼' : '▶'" style="display: inline-block; width: 1.2em;"></span>
                   <span x-text="section"></span>
-                  <span style="font-size: 0.85em; font-weight: normal; margin-left: 0.5rem; color: #666;" x-text="'(' + sectionChecks.length + ')'"></span>
+                  <span style="font-size: 0.85em; font-weight: normal; margin-left: 0.5rem; color: #666;" x-text="'(' + runs.length + ')'"></span>
                 </h3>
               </div>
               <div x-show="isSectionExpanded('history-' + section)">
-                <template x-for="check in sectionChecks" :key="check.id">
-                  <div class="history-item">
-                    <div class="history-run" x-text="check.runName"></div>
-                    <div class="history-details" x-text="new Date(check.checkTime).toLocaleTimeString() + ' - ' + check.patroller"></div>
+                <template x-for="run in runs" :key="run.runName">
+                  <div>
+                    <div class="run-item">
+                      <div class="run-info">
+                        <div class="run-name" x-text="run.runName"></div>
+                        <div x-show="run.checks.length === 0" class="run-time" style="color: #999; font-style: italic;">No checks</div>
+                        <template x-for="check in run.checks" :key="check.id">
+                        <div class="run-time" x-text="new Date(check.checkTime).toLocaleTimeString() + ' - ' + check.patroller"></div>
+                        </template>
+                    </div>
                   </div>
                 </template>
               </div>
             </div>
           </template>
-          <div x-show="checks.length === 0" class="message">No checks today</div>
         </div>
 
         <!-- Patrollers Tab -->
