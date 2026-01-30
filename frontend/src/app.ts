@@ -30,6 +30,8 @@ export function createApp() {
     newUserName: '',
     message: null as { type: 'success' | 'error' | 'warning'; text: string } | null,
     expandedSections: new Set<string>(),
+    runSearchQuery: '',
+    searchExpandedSections: new Set<string>(),
     timezone: 'UTC' as string,
     googleOAuthStatus: null as any,
     googleDriveWasDisconnected: false, // Track if we showed a disconnection warning
@@ -41,6 +43,35 @@ export function createApp() {
       const runsWithColors = calculateRunColors(this.runs, this.checks);
       const grouped = groupRunsBySection(runsWithColors);
       return Array.from(grouped.entries());
+    },
+
+    get filteredGroupedRuns() {
+      const query = this.runSearchQuery.toLowerCase().trim();
+
+      if (!query) {
+        return this.groupedRuns;
+      }
+
+      const runsWithColors = calculateRunColors(this.runs, this.checks);
+      const grouped = new Map<string, RunWithColor[]>();
+
+      for (const run of runsWithColors) {
+        if (run.name.toLowerCase().includes(query)) {
+          if (!grouped.has(run.section)) {
+            grouped.set(run.section, []);
+          }
+          grouped.get(run.section)!.push(run);
+        }
+      }
+
+      return Array.from(grouped.entries());
+    },
+
+    get totalMatchCount() {
+      if (!this.runSearchQuery.trim()) {
+        return 0;
+      }
+      return this.filteredGroupedRuns.reduce((sum, [_, runs]) => sum + runs.length, 0);
     },
 
     get groupedChecks() {
@@ -232,6 +263,11 @@ export function createApp() {
     switchTab(tab: typeof this.currentTab) {
       this.currentTab = tab;
       this.showConfirm = false;
+      // Clear search when switching away from runs tab
+      if (tab !== 'runs') {
+        this.runSearchQuery = '';
+        this.handleRunSearch();
+      }
     },
 
     // Cart
@@ -398,10 +434,12 @@ export function createApp() {
     async refreshGoogleToken() {
       try {
         await api.refreshGoogleToken();
-        this.showMessage('success', 'Google connection refreshed');
+        const refreshResult = await api.refreshRuns();
+
+        this.showMessage('success', `✅ ${refreshResult.message}`);
         await this.loadData();
       } catch (err: any) {
-        this.error = err.message || 'Failed to refresh token';
+        this.error = err.message || 'Failed to refresh connection';
       }
     },
 
@@ -473,15 +511,56 @@ export function createApp() {
     toggleSection(section: string) {
       if (this.expandedSections.has(section)) {
         this.expandedSections.delete(section);
+        this.searchExpandedSections.delete(section);
       } else {
         this.expandedSections.add(section);
+        if (this.searchExpandedSections.has(section)) {
+          this.searchExpandedSections.delete(section);
+        }
       }
-      // Save to localStorage
-      localStorage.setItem('expandedSections', JSON.stringify(Array.from(this.expandedSections)));
+
+      if (!this.runSearchQuery.trim()) {
+        localStorage.setItem('expandedSections', JSON.stringify(Array.from(this.expandedSections)));
+      }
     },
 
     isSectionExpanded(section: string) {
       return this.expandedSections.has(section);
+    },
+
+    handleRunSearch() {
+      const query = this.runSearchQuery.toLowerCase().trim();
+
+      if (!query) {
+        // Clear search - collapse auto-expanded sections
+        for (const section of this.searchExpandedSections) {
+          if (this.expandedSections.has(section)) {
+            this.expandedSections.delete(section);
+          }
+        }
+        this.searchExpandedSections.clear();
+        return;
+      }
+
+      // Auto-expand sections with matches
+      const sectionsWithMatches = new Set<string>(
+        this.filteredGroupedRuns.map(([section, _]) => section)
+      );
+
+      for (const section of sectionsWithMatches) {
+        if (!this.expandedSections.has(section)) {
+          this.expandedSections.add(section);
+          this.searchExpandedSections.add(section);
+        }
+      }
+
+      // Collapse sections that no longer match
+      for (const section of this.searchExpandedSections) {
+        if (!sectionsWithMatches.has(section)) {
+          this.expandedSections.delete(section);
+          this.searchExpandedSections.delete(section);
+        }
+      }
     },
 
     formatTimeSince,

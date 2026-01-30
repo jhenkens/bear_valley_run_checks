@@ -222,6 +222,36 @@ router.post('/oauth/folder', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
+// POST /api/google/admin/refresh-runs - Refresh run list from Google Sheets
+router.post('/admin/refresh-runs', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    if (appConfig.runProvider !== 'sheets') {
+      return res.status(400).json({
+        error: 'Run refresh only available with sheets provider'
+      });
+    }
+
+    logger.info('Refreshing run provider', { userId: req.user!.id });
+
+    const newProvider = refreshRunProvider();
+    await newProvider.initialize();
+    const runs = newProvider.getRuns();
+
+    logger.info(`Run provider refreshed with ${runs.length} runs`);
+
+    res.json({
+      success: true,
+      runCount: runs.length,
+      message: `Reloaded ${runs.length} runs from Google Sheets`,
+    });
+  } catch (error: any) {
+    logger.error('Error refreshing runs:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to refresh runs'
+    });
+  }
+});
+
 // POST /api/google/oauth/refresh - Manually refresh token
 router.post('/oauth/refresh', requireAuth, requireAdmin, async (req, res) => {
   try {

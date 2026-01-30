@@ -118,6 +118,13 @@ export const api = {
     });
   },
 
+  async refreshRuns() {
+    return fetchJSON<{ success: boolean; runCount: number; message: string }>(
+      `${API_BASE}/google/admin/refresh-runs`,
+      { method: 'POST' }
+    );
+  },
+
   async disconnectGoogle() {
     return fetchJSON<{ success: boolean }>(`${API_BASE}/google/oauth/disconnect`, {
       method: 'DELETE',

@@ -74,7 +74,34 @@ if (appRoot) {
 
         <!-- Runs Tab -->
         <div class="content" x-show="currentTab === 'runs' && !showConfirm">
-          <template x-for="[section, runs] in groupedRuns" :key="section">
+          <!-- Search Input -->
+          <div class="search-container">
+            <div class="search-input-wrapper">
+              <input
+                type="text"
+                x-model="runSearchQuery"
+                @input="handleRunSearch"
+                placeholder="Search runs by name..."
+                class="search-input"
+              >
+              <button
+                x-show="runSearchQuery"
+                @click="runSearchQuery = ''; handleRunSearch()"
+                class="search-clear"
+                aria-label="Clear search"
+              >
+                ✕
+              </button>
+            </div>
+            <div x-show="runSearchQuery && totalMatchCount > 0" class="search-results">
+              <span x-text="totalMatchCount + ' match' + (totalMatchCount !== 1 ? 'es' : '')"></span>
+            </div>
+            <div x-show="runSearchQuery && totalMatchCount === 0" class="search-no-results">
+              No runs found
+            </div>
+          </div>
+
+          <template x-for="[section, runs] in filteredGroupedRuns" :key="section">
             <div class="section-runs">
               <div class="section-header" @click="toggleSection(section)" style="cursor: pointer; user-select: none;">
                 <h3>
@@ -222,7 +249,7 @@ if (appRoot) {
                 </div>
 
                 <div class="oauth-actions" style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                  <button class="btn" @click="refreshGoogleToken">Refresh Connection</button>
+                  <button class="btn" @click="refreshGoogleToken">Refresh Connection & Reload Runs</button>
                   <button class="btn-danger" @click="disconnectGoogle">Disconnect</button>
                   <button class="btn" style="background: #9e9e9e;" @click="testMarkInactive" x-show="user?.isSuperuser">🧪 Test: Force Inactive</button>
                 </div>
@@ -270,7 +297,10 @@ if (appRoot) {
         <!-- Cart Banner -->
         <div class="cart-banner" x-show="cart.length > 0 && !showConfirm">
           <div class="cart-count" x-text="cart.length + ' run' + (cart.length !== 1 ? 's' : '') + ' selected'"></div>
-          <button class="btn" @click="openConfirm">Continue</button>
+          <div class="cart-actions">
+            <button class="btn btn-clear" @click="clearCart">Clear</button>
+            <button class="btn" @click="openConfirm">Continue</button>
+          </div>
         </div>
       </div>
     </div>
