@@ -6,14 +6,12 @@ import { appConfig } from '../config/config';
 import { logger } from '../utils/logger';
 import { getAllPatrollers } from '../services/patrollerService';
 import { getLatestOAuth } from '../services/googleOAuth';
-import { run } from 'googleapis/build/src/apis/run';
-
 const router = Router();
-const runProvider = createRunProvider();
 
 // GET /api/run_status - Get combined run status (runs, checks, patrollers, timezone, notifications)
 router.get('/run_status', requireAuth, async (req, res) => {
   try {
+    const runProvider = createRunProvider();
     await runProvider.initialize();
     const runs = runProvider.getRuns();
     const checks = getChecks();
