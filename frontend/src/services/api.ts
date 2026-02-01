@@ -90,7 +90,14 @@ export const api = {
   async createUser(email: string, name: string) {
     return fetchJSON<{ user: any }>(`${API_BASE}/users`, {
       method: 'POST',
-      body: JSON.stringify({ email, name }),
+      body: JSON.stringify({ email: email || null, name }),
+    });
+  },
+
+  async updateUser(userId: string, data: { email?: string | null; name?: string }) {
+    return fetchJSON<{ user: any; message: string }>(`${API_BASE}/users/${userId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
     });
   },
 

@@ -11,7 +11,7 @@ declare module 'express-session' {
 export interface AuthRequest extends Request {
   user?: {
     id: string;
-    email: string;
+    email: string | null;
     name: string;
     isAdmin: boolean;
     isSuperuser: boolean;
@@ -38,7 +38,7 @@ export async function requireAuth(
     return;
   }
 
-  const userIsSuperuser = isSuperuser(user.email);
+  const userIsSuperuser = user.email ? isSuperuser(user.email) : false;
 
   req.user = {
     id: user.id,

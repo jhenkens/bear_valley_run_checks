@@ -258,34 +258,39 @@ if (appRoot) {
           </div>
 
           <div class="confirm-list">
-            <h3>Add User</h3>
-            <div class="form-group">
-              <label>Email</label>
-              <input type="email" x-model="newUserEmail" placeholder="user@example.com">
-            </div>
+            <h3 x-text="editingUserId ? 'Edit User' : 'Add User'"></h3>
             <div class="form-group">
               <label>Name</label>
               <input type="text" x-model="newUserName" placeholder="John Doe">
             </div>
-            <button class="btn" @click="createUser">Create User</button>
+            <div class="form-group">
+              <label>Email <span style="font-weight: normal; color: #999;">(optional)</span></label>
+              <input type="email" x-model="newUserEmail" placeholder="user@example.com">
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+              <button class="btn" x-show="!editingUserId" @click="createUser">Create User</button>
+              <button class="btn" x-show="editingUserId" @click="saveUser">Save User</button>
+              <button class="btn" x-show="editingUserId" @click="cancelEdit" style="background: #6c757d;">Cancel</button>
+            </div>
           </div>
 
           <div class="user-table">
-            <template x-for="user in users" :key="user.id">
+            <template x-for="u in users" :key="u.id">
               <div class="user-row">
                 <div class="user-info">
                   <div class="user-name">
-                    <span x-text="user.name"></span>
-                    <span x-show="user.isSuperuser" class="user-badge">SUPERUSER</span>
+                    <span x-text="u.name"></span>
+                    <span x-show="u.isSuperuser" class="user-badge">SUPERUSER</span>
                   </div>
-                  <div class="user-email" x-text="user.email"></div>
+                  <div class="user-email" x-text="u.email || '(no email)'"></div>
                 </div>
                 <div class="user-actions">
                   <label>
-                    <input type="checkbox" :checked="user.isAdmin" @change="toggleAdmin(user)" :disabled="user.isSuperuser">
+                    <input type="checkbox" :checked="u.isAdmin" @change="toggleAdmin(u)" :disabled="u.isSuperuser">
                     Admin
                   </label>
-                  <button class="btn-danger" @click="deleteUser(user)" :disabled="user.isSuperuser">Delete</button>
+                  <button class="btn" @click="editUser(u)" :disabled="u.isSuperuser" style="font-size: 0.85rem; padding: 0.25rem 0.5rem;">Edit</button>
+                  <button class="btn-danger" @click="deleteUser(u)" :disabled="u.isSuperuser">Delete</button>
                 </div>
               </div>
             </template>

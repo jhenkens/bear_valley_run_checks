@@ -28,6 +28,7 @@ export function createApp() {
     users: [] as any[],
     newUserEmail: '',
     newUserName: '',
+    editingUserId: null as string | null,
     message: null as { type: 'success' | 'error' | 'warning'; text: string } | null,
     expandedSections: new Set<string>(),
     runSearchQuery: '',
@@ -387,18 +388,53 @@ export function createApp() {
       try {
         this.error = null;
 
-        if (!this.newUserEmail || !this.newUserName) {
-          this.error = 'Email and name are required';
+        if (!this.newUserName) {
+          this.error = 'Name is required';
           return;
         }
 
         await api.createUser(this.newUserEmail, this.newUserName);
-        this.showMessage('success', 'User created and welcome email sent');
+        this.showMessage('success', this.newUserEmail ? 'User created and welcome email sent' : 'User created');
         this.newUserEmail = '';
         this.newUserName = '';
         await this.loadData();
       } catch (err: any) {
         this.error = err.message || 'Failed to create user';
+      }
+    },
+
+    editUser(user: any) {
+      this.editingUserId = user.id;
+      this.newUserName = user.name;
+      this.newUserEmail = user.email || '';
+    },
+
+    cancelEdit() {
+      this.editingUserId = null;
+      this.newUserName = '';
+      this.newUserEmail = '';
+    },
+
+    async saveUser() {
+      try {
+        this.error = null;
+
+        if (!this.newUserName) {
+          this.error = 'Name is required';
+          return;
+        }
+
+        await api.updateUser(this.editingUserId!, {
+          name: this.newUserName,
+          email: this.newUserEmail || null,
+        });
+        this.showMessage('success', 'User updated');
+        this.editingUserId = null;
+        this.newUserEmail = '';
+        this.newUserName = '';
+        await this.loadData();
+      } catch (err: any) {
+        this.error = err.message || 'Failed to update user';
       }
     },
 
