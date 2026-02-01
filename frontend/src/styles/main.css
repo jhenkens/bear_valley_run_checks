@@ -567,6 +567,33 @@ body {
   font-size: 0.85rem;
 }
 
+/* Input with clear button */
+.input-with-clear {
+  position: relative;
+}
+
+.input-with-clear input {
+  padding-right: 2.5rem;
+}
+
+.clear-btn {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  color: #999;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  line-height: 1;
+}
+
+.clear-btn:hover {
+  color: #333;
+}
+
 /* Autocomplete */
 .autocomplete {
   position: relative;
