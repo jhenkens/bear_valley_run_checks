@@ -32,7 +32,7 @@ router.get('/users', requireAdmin, async (req, res) => {
       },
     });
 
-    const usersWithSuperuser = users.map(user => ({
+    const usersWithSuperuser = users.map((user: typeof users[number]) => ({
       ...user,
       isSuperuser: user.email ? isSuperuser(user.email) : false,
     }));

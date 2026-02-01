@@ -8,7 +8,7 @@ export async function getAllPatrollers(): Promise<string[]> {
     select: { name: true },
   });
 
-  const userNames = users.map(u => u.name);
+  const userNames = users.map((u: { name: string }) => u.name);
   const configPatrollers = appConfig.patrollers || [];
 
   // Combine and deduplicate
