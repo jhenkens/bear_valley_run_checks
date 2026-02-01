@@ -383,6 +383,12 @@ export function createApp() {
       this.showAutocomplete = false;
     },
 
+    clearPatroller() {
+      this.confirmPatroller = '';
+      this.patrollerSearch = '';
+      this.showAutocomplete = false;
+    },
+
     // Admin
     async createUser() {
       try {
