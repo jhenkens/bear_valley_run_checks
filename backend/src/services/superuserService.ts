@@ -46,7 +46,8 @@ export async function syncSuperusers(): Promise<void> {
   }
 }
 
-export function isSuperuser(email: string): boolean {
+export function isSuperuser(email: string | null): boolean {
+  if (!email) return false;
   return appConfig.superusers.some(su => su.email === email);
 }
 
