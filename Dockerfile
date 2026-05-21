@@ -24,6 +24,7 @@ COPY backend/ ./
 RUN npx prisma generate
 # Increase Node memory limit for TypeScript compilation
 RUN NODE_OPTIONS="--max-old-space-size=2048" npm run build
+RUN npm prune --omit=dev
 
 # Stage 3: Production
 FROM node:20-alpine
@@ -33,19 +34,14 @@ RUN apk add --no-cache openssl
 
 WORKDIR /app
 
-# Install ALL dependencies first (including prisma CLI for migrations)
 COPY backend/package*.json ./
-RUN npm install
+COPY --from=backend-builder /app/backend/node_modules ./node_modules
 
 # Copy built backend
 COPY --from=backend-builder /app/backend/dist ./dist
 
 # Copy Prisma schema and migrations
 COPY backend/prisma ./prisma
-
-# Copy generated Prisma client from builder
-COPY --from=backend-builder /app/backend/node_modules/.prisma ./node_modules/.prisma
-COPY --from=backend-builder /app/backend/node_modules/@prisma ./node_modules/@prisma
 
 # Copy built frontend
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
