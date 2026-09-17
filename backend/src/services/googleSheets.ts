@@ -35,9 +35,10 @@ export async function initializeGoogleSheets(): Promise<void> {
 
 /**
  * Get today's date in the configured timezone (YYYY-MM-DD format).
- * Used as the name of today's tab within the season spreadsheet.
+ * Used as the name of today's tab within the season spreadsheet, and by
+ * runCheckCache to detect when the calendar day has rolled over.
  */
-function getTodaySheetName(): string {
+export function getTodaySheetName(): string {
   return formatInTimeZone(new Date(), appConfig.timezone, 'yyyy-MM-dd');
 }
 
@@ -47,13 +48,75 @@ function getTodaySheetName(): string {
  * season starting that year; dates January-June belong to the season that
  * started the previous July.
  */
-function getSeasonName(): string {
+function getSeasonStartYear(): number {
   const yearMonth = formatInTimeZone(new Date(), appConfig.timezone, 'yyyy-MM');
   const [yearStr, monthStr] = yearMonth.split('-');
   const year = parseInt(yearStr, 10);
   const month = parseInt(monthStr, 10);
-  const startYear = month >= 7 ? year : year - 1;
+  return month >= 7 ? year : year - 1;
+}
+
+function getSeasonName(): string {
+  const startYear = getSeasonStartYear();
   return `${startYear}-${startYear + 1} Run-Checks`;
+}
+
+function pad2(n: number): string {
+  return n < 10 ? `0${n}` : `${n}`;
+}
+
+/**
+ * Weekday-of-a-calendar-date is a plain calendar fact (Sept 17 2026 is a
+ * Thursday everywhere), so this works purely in UTC internally to get a
+ * deterministic answer no matter what timezone the server process happens to
+ * run in (e.g. a Docker container defaulting to TZ=UTC). Returns a
+ * "yyyy-MM-dd" string rather than a Date so nothing downstream can
+ * accidentally print or reinterpret it through an ambient timezone again -
+ * that's what made a correct calculation look wrong.
+ */
+function getNthWeekdayOfMonth(year: number, month: number, weekday: number, n: number): string {
+  const firstWeekday = new Date(Date.UTC(year, month, 1)).getUTCDay();
+  const day = 1 + ((weekday - firstWeekday + 7) % 7) + (n - 1) * 7;
+  return `${year}-${pad2(month + 1)}-${pad2(day)}`;
+}
+
+/**
+ * The last occurrence of a weekday in a month, as a UTC-midnight Date.
+ */
+function getLastWeekdayOfMonth(year: number, month: number, weekday: number): Date {
+  const lastOfMonth = new Date(Date.UTC(year, month + 1, 0));
+  const diff = (lastOfMonth.getUTCDay() - weekday + 7) % 7;
+  return new Date(Date.UTC(year, month, lastOfMonth.getUTCDate() - diff));
+}
+
+/**
+ * Shift a "yyyy-MM-dd" calendar-date string by a number of days (may be
+ * negative), staying purely in calendar-date terms.
+ */
+function addDaysToDateString(dateString: string, days: number): string {
+  const [year, month, day] = dateString.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+}
+
+/**
+ * The ski season's "auto-create a tab every day" window: from the Wednesday
+ * before Thanksgiving through the second-to-last Sunday in April. Within
+ * this window, patrol activity is expected every day, so callers may
+ * proactively create each day's tab even if nobody has submitted a check
+ * yet. Outside it, tabs stay lazy - only created on an actual submission.
+ */
+function isWithinDailyTabWindow(): boolean {
+  const seasonStartYear = getSeasonStartYear();
+
+  const thanksgiving = getNthWeekdayOfMonth(seasonStartYear, 10, 4, 4); // 4th Thursday of November
+  const wedBeforeThanksgiving = addDaysToDateString(thanksgiving, -1);
+
+  const lastSundayApril = getLastWeekdayOfMonth(seasonStartYear + 1, 3, 0); // last Sunday of April
+  const secondToLastSundayApril = new Date(lastSundayApril);
+  secondToLastSundayApril.setUTCDate(secondToLastSundayApril.getUTCDate() - 7);
+
+  const today = getTodaySheetName();
+  return today >= wedBeforeThanksgiving && today <= secondToLastSundayApril.toISOString().slice(0, 10);
 }
 
 /**
@@ -262,6 +325,29 @@ async function ensureTodayTab(): Promise<{ spreadsheetId: string; tabName: strin
   const spreadsheetId = await ensureSeasonSpreadsheet();
   const tabName = await ensureDailyTab(spreadsheetId);
   return { spreadsheetId, tabName };
+}
+
+/**
+ * If today falls within the ski season's daily-tab window (Wednesday before
+ * Thanksgiving through the second-to-last Sunday in April), proactively
+ * create today's tab - and the season spreadsheet, if needed - even though
+ * nobody has submitted a check yet. Outside that window this is a no-op;
+ * tabs remain lazy, created only when appendRunCheck actually writes one.
+ */
+export async function ensureTodayTabForActiveSeason(): Promise<void> {
+  if (appConfig.runProvider !== 'sheets') {
+    return;
+  }
+
+  if (!isWithinDailyTabWindow()) {
+    return;
+  }
+
+  try {
+    await ensureTodayTab();
+  } catch (error) {
+    logger.error('Error ensuring daily tab for active season:', error);
+  }
 }
 
 export async function loadTodayChecks(): Promise<RunCheck[]> {

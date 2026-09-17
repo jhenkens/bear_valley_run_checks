@@ -1,4 +1,5 @@
-import { RunCheck, loadTodayChecks, appendRunCheck as appendToSheet } from './googleSheets';
+import cron from 'node-cron';
+import { RunCheck, loadTodayChecks, appendRunCheck as appendToSheet, ensureTodayTabForActiveSeason, getTodaySheetName } from './googleSheets';
 import { formatInTimeZone } from 'date-fns-tz';
 import { appConfig } from '../config/config';
 import { logger } from '../utils/logger';
@@ -7,21 +8,23 @@ interface CachedRunCheck extends RunCheck {
   writtenToSheet: boolean;
 }
 
+// Don't auto-create the day's tab in the middle of the night - wait until
+// this hour (in the configured timezone) has passed.
+const EARLIEST_AUTO_TAB_HOUR = 3;
+
 let cache: CachedRunCheck[] = [];
 let lastRefresh: Date = new Date();
+let cachedDay: string = ''; // calendar day (configured timezone) the cache currently represents
 
 export async function initialize(): Promise<void> {
   if (appConfig.runProvider === 'sheets') {
-    const loadedChecks = await loadTodayChecks();
-    cache = loadedChecks.map(check => ({ ...check, writtenToSheet: true }));
-    lastRefresh = new Date();
+    await checkAndReload();
     logger.info(`Run check cache initialized with ${cache.length} checks from Google Sheets`);
   } else {
     logger.info(`Run check cache initialized (in-memory only)`);
   }
 
-  // Schedule midnight reload (in configured timezone)
-  scheduleMidnightReload();
+  scheduleHourlyCheck();
 }
 
 export function getChecks(): RunCheck[] {
@@ -86,38 +89,53 @@ export function clearCache(): void {
 }
 
 /**
- * Calculate milliseconds until midnight in the configured timezone
+ * If the calendar day (in the configured timezone) has rolled over since the
+ * cache was last loaded, reset it and reload today's checks from the sheet.
+ * No-op otherwise, so this is safe to call as often as we like without
+ * risking dropping checks that were added but haven't been flushed yet.
  */
-function getMsUntilMidnight(): number {
-  const now = new Date();
+async function reloadCacheIfDayChanged(): Promise<void> {
+  const today = getTodaySheetName();
+  if (today === cachedDay) {
+    return;
+  }
 
-  // Get current time in HH:mm:ss format in the configured timezone
-  const timeString = formatInTimeZone(now, appConfig.timezone, 'HH:mm:ss');
-  const [hours, minutes, seconds] = timeString.split(':').map(Number);
-
-  // Calculate seconds since midnight
-  const secondsSinceMidnight = hours * 3600 + minutes * 60 + seconds;
-
-  // Calculate seconds until midnight (24 hours = 86400 seconds)
-  const secondsUntilMidnight = 86400 - secondsSinceMidnight;
-
-  return secondsUntilMidnight * 1000;
+  logger.info(`Day rollover detected (${cachedDay || 'none'} -> ${today}), reloading run check cache`);
+  clearCache();
+  const loadedChecks = await loadTodayChecks();
+  cache = loadedChecks.map(check => ({ ...check, writtenToSheet: true }));
+  cachedDay = today;
 }
 
-function scheduleMidnightReload(): void {
-  const msUntilMidnight = getMsUntilMidnight();
+async function checkAndReload(): Promise<void> {
+  if (appConfig.runProvider !== 'sheets') {
+    return;
+  }
 
-  setTimeout(async () => {
-    logger.info('Midnight reload triggered (in configured timezone)');
-    clearCache();
-    if (appConfig.runProvider === 'sheets') {
-      const loadedChecks = await loadTodayChecks();
-      cache = loadedChecks.map(check => ({ ...check, writtenToSheet: true }));
+  await reloadCacheIfDayChanged();
+
+  const hour = parseInt(formatInTimeZone(new Date(), appConfig.timezone, 'HH'), 10);
+  if (hour >= EARLIEST_AUTO_TAB_HOUR) {
+    // Cheap/idempotent once today's tab exists - only touches the Sheets API
+    // when there's actually something missing to create.
+    await ensureTodayTabForActiveSeason();
+  }
+}
+
+function scheduleHourlyCheck(): void {
+  cron.schedule('5 * * * *', async () => {
+    try {
+      await checkAndReload();
+    } catch (error) {
+      logger.error('Error during hourly run check cache check:', error);
     }
-    scheduleMidnightReload(); // Schedule next reload
-  }, msUntilMidnight);
+  }, {
+    name: 'run-check-hourly-check',
+    timezone: appConfig.timezone,
+    noOverlap: true,
+  });
 
-  logger.info(`Scheduled midnight reload in ${Math.round(msUntilMidnight / 1000 / 60)} minutes (timezone: ${appConfig.timezone})`);
+  logger.info(`Scheduled hourly run check cache check (5 minutes past every hour, timezone: ${appConfig.timezone})`);
 }
 
 export function getLastRefreshTime(): Date {
