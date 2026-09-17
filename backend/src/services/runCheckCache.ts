@@ -27,11 +27,14 @@ export async function initialize(): Promise<void> {
   scheduleHourlyCheck();
 }
 
-export function getChecks(): RunCheck[] {
+export async function getChecks(): Promise<RunCheck[]> {
+  await ensureCacheForToday();
   return [...cache];
 }
 
 export async function addCheck(check: Omit<RunCheck, 'id' | 'createdAt'>): Promise<{ check: RunCheck; googleDriveSaved: boolean }> {
+  await ensureCacheForToday();
+
   const newCheck: CachedRunCheck = {
     ...check,
     id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -91,19 +94,39 @@ export function clearCache(): void {
 /**
  * If the calendar day (in the configured timezone) has rolled over since the
  * cache was last loaded, reset it and reload today's checks from the sheet.
- * No-op otherwise, so this is safe to call as often as we like without
- * risking dropping checks that were added but haven't been flushed yet.
+ * No-op otherwise, so this is cheap to call on every cache read/write as
+ * well as from the hourly schedule.
+ *
+ * Any checks still waiting to be written to the sheet are flushed first. If
+ * that flush doesn't fully succeed, the reset is deferred rather than
+ * clearing them out from under an in-flight write - we'll retry on the next
+ * call instead of silently losing data at the day boundary.
  */
-async function reloadCacheIfDayChanged(): Promise<void> {
+async function ensureCacheForToday(): Promise<void> {
   const today = getTodaySheetName();
   if (today === cachedDay) {
     return;
   }
 
+  if (appConfig.runProvider === 'sheets') {
+    const flushed = await flushPendingChecks();
+    if (!flushed) {
+      const stillPending = cache.filter(c => !c.writtenToSheet).length;
+      logger.warn(
+        `Day rollover to ${today} deferred - ${stillPending} check(s) still unflushed from ${cachedDay || 'the previous day'}`
+      );
+      return;
+    }
+  }
+
   logger.info(`Day rollover detected (${cachedDay || 'none'} -> ${today}), reloading run check cache`);
   clearCache();
-  const loadedChecks = await loadTodayChecks();
-  cache = loadedChecks.map(check => ({ ...check, writtenToSheet: true }));
+
+  if (appConfig.runProvider === 'sheets') {
+    const loadedChecks = await loadTodayChecks();
+    cache = loadedChecks.map(check => ({ ...check, writtenToSheet: true }));
+  }
+
   cachedDay = today;
 }
 
@@ -112,7 +135,7 @@ async function checkAndReload(): Promise<void> {
     return;
   }
 
-  await reloadCacheIfDayChanged();
+  await ensureCacheForToday();
 
   const hour = parseInt(formatInTimeZone(new Date(), appConfig.timezone, 'HH'), 10);
   if (hour >= EARLIEST_AUTO_TAB_HOUR) {

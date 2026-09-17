@@ -14,7 +14,7 @@ router.get('/run_status', requireAuth, async (req, res) => {
     const runProvider = createRunProvider();
     await runProvider.initialize();
     const runs = runProvider.getRuns();
-    const checks = getChecks();
+    const checks = await getChecks();
     const patrollers = await getAllPatrollers();
 
     // Convert checks dates to epoch seconds
