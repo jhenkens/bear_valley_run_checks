@@ -28,7 +28,7 @@ if (appRoot) {
 
         <div class="form-group">
           <label>Email</label>
-          <input type="email" x-model="loginEmail" @keyup.enter="isDev ? devLogin() : login()" placeholder="your@email.com">
+          <input type="email" x-model="loginEmail" @keyup.enter="isDev ? devLogin() : login()" placeholder="your@email.com" autocomplete="username webauthn">
         </div>
 
         <button x-show="isDev" class="btn" @click="devLogin" :disabled="!loginEmail || isLoggingIn" style="background: #28a745;">
@@ -37,6 +37,12 @@ if (appRoot) {
 
         <button x-show="!isDev" class="btn" @click="login" :disabled="!loginEmail || isLoggingIn">
           <span x-text="isLoggingIn ? 'Sending...' : 'Send Login Link'"></span>
+        </button>
+
+        <!-- Passkey autofill (conditional UI) fires automatically from the email field above.
+             This is a manual fallback for browsers/platforms that don't support that. -->
+        <button x-show="passkeySupported" class="btn" @click="loginWithPasskey" :disabled="isLoggingIn" style="background: #6c757d; margin-top: 0.5rem;">
+          Use a passkey
         </button>
 
         <div x-show="loginMessage" class="message success" x-text="loginMessage" style="margin-top: 1rem;"></div>
@@ -69,6 +75,7 @@ if (appRoot) {
           <button class="tab" :class="currentTab === 'runs' && 'active'" @click="switchTab('runs')">Runs</button>
           <button class="tab" :class="currentTab === 'history' && 'active'" @click="switchTab('history')">History</button>
           <button class="tab" :class="currentTab === 'patrollers' && 'active'" @click="switchTab('patrollers')">Patrollers</button>
+          <button class="tab" :class="currentTab === 'account' && 'active'" @click="switchTab('account')">Account</button>
           <button class="tab" :class="currentTab === 'admin' && 'active'" @click="switchTab('admin')" x-show="user?.isAdmin">Admin</button>
         </div>
 
@@ -218,6 +225,35 @@ if (appRoot) {
             </div>
           </template>
           <div x-show="checks.length === 0" class="message">No checks today</div>
+        </div>
+
+        <!-- Account Tab -->
+        <div class="content" x-show="currentTab === 'account'">
+          <div class="confirm-list" style="margin-bottom: 2rem;">
+            <h3>Passkeys</h3>
+            <p style="font-size: 0.9em; color: #666;">Sign in with your device's fingerprint, face, or PIN instead of an email link.</p>
+
+            <template x-for="passkey in passkeys" :key="passkey.id">
+              <div class="history-item" style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <div class="history-run" x-text="passkey.name"></div>
+                  <div class="history-details" x-text="'Added ' + new Date(passkey.createdAt).toLocaleDateString() + (passkey.lastUsedAt ? ' · last used ' + new Date(passkey.lastUsedAt).toLocaleDateString() : '')"></div>
+                </div>
+                <button class="btn" style="background: #dc3545; width: auto; padding: 0.4rem 0.8rem;" @click="removePasskey(passkey.id)">Remove</button>
+              </div>
+            </template>
+            <div x-show="passkeys.length === 0" class="message">No passkeys yet</div>
+
+            <div class="form-group" style="margin-top: 1rem;">
+              <label>Name this passkey (optional)</label>
+              <input type="text" x-model="newPasskeyName" placeholder="e.g. My Phone" @keyup.enter="addPasskey">
+            </div>
+            <button class="btn" @click="addPasskey" :disabled="isAddingPasskey">
+              <span x-text="isAddingPasskey ? 'Adding...' : 'Add a passkey'"></span>
+            </button>
+            <div x-show="passkeyMessage" class="message success" x-text="passkeyMessage" style="margin-top: 1rem;"></div>
+            <div x-show="!passkeySupported" class="message" style="margin-top: 1rem;">Your browser doesn't support passkeys.</div>
+          </div>
         </div>
 
         <!-- Admin Tab -->

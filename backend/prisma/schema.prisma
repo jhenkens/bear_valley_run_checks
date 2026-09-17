@@ -18,9 +18,29 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  sessions    Session[]
-  magicLinks  MagicLink[]
-  googleOAuth GoogleOAuth?
+  sessions       Session[]
+  magicLinks     MagicLink[]
+  googleOAuth    GoogleOAuth?
+  authenticators Authenticator[]
+}
+
+model Authenticator {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  credentialId String    @unique // base64url-encoded credential ID
+  publicKey    Bytes                // COSE public key
+  counter      Int       @default(0) // Signature counter, guards against cloned authenticators
+  transports   String?              // Comma-separated AuthenticatorTransport hints (e.g. "internal,hybrid")
+  deviceType   String?              // 'singleDevice' | 'multiDevice'
+  backedUp     Boolean   @default(false)
+  name         String               // User-facing label, e.g. "Chrome on MacBook"
+
+  createdAt    DateTime  @default(now())
+  lastUsedAt   DateTime?
+
+  @@index([userId])
 }
 
 model MagicLink {

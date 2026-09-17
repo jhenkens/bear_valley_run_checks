@@ -5,6 +5,7 @@ import { isSuperuser } from '../services/superuserService';
 declare module 'express-session' {
   interface SessionData {
     userId: string;
+    currentChallenge: string;
   }
 }
 

@@ -63,6 +63,39 @@ export const api = {
     return fetchJSON<{ user: any }>(`${AUTH_BASE}/me`);
   },
 
+  // Passkeys
+  async getPasskeys() {
+    return fetchJSON<{ passkeys: any[] }>(`${AUTH_BASE}/passkey`);
+  },
+
+  async deletePasskey(id: string) {
+    return fetchJSON<{ message: string }>(`${AUTH_BASE}/passkey/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async getPasskeyRegistrationOptions() {
+    return fetchJSON<any>(`${AUTH_BASE}/passkey/register/options`);
+  },
+
+  async verifyPasskeyRegistration(response: any, name: string) {
+    return fetchJSON<{ verified: boolean }>(`${AUTH_BASE}/passkey/register/verify`, {
+      method: 'POST',
+      body: JSON.stringify({ response, name }),
+    });
+  },
+
+  async getPasskeyAuthenticationOptions() {
+    return fetchJSON<any>(`${AUTH_BASE}/passkey/authenticate/options`);
+  },
+
+  async verifyPasskeyAuthentication(response: any) {
+    return fetchJSON<{ user: any }>(`${AUTH_BASE}/passkey/authenticate/verify`, {
+      method: 'POST',
+      body: JSON.stringify({ response }),
+    });
+  },
+
   // Run Status - combined endpoint
   async getRunStatus() {
     return fetchJSON<{
