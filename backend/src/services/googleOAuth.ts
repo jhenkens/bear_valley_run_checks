@@ -9,6 +9,20 @@ export interface OAuthTokens {
   expiresAt: Date;
 }
 
+// How far ahead of expiry to refresh. Used by both refreshTokenIfNeeded()
+// (decides whether to actually call Google) and scheduleNextRefresh()
+// (decides when to wake up and try) - they must agree, or
+// scheduleNextRefresh() can decide "must refresh now" while
+// refreshTokenIfNeeded() decides "still fine, do nothing," which spins
+// forever since nothing ever advances the expiry.
+const TOKEN_REFRESH_LEAD_MS = 10 * 60 * 1000;
+
+// Floor on how soon scheduleNextRefresh() will re-check, even when a
+// refresh is needed "now". Without this, a refresh that fails without
+// advancing tokenExpiresAt (e.g. a revoked grant) would recurse with zero
+// delay and busy-loop identically to the lead-time mismatch above.
+const MIN_REFRESH_RETRY_MS = 60 * 1000;
+
 // Get OAuth2 client configured with environment credentials
 function getOAuth2Client() {
   return new google.auth.OAuth2(
@@ -49,16 +63,16 @@ export async function getLatestOAuth() {
 
 /**
  * Refresh OAuth access token if expired or about to expire
- * Refreshes proactively when token has 5 minutes or less remaining
+ * Refreshes proactively when token has TOKEN_REFRESH_LEAD_MS or less remaining
  */
 export async function refreshTokenIfNeeded(oauthRecord: any): Promise<OAuthTokens> {
   const now = new Date();
-  const fiveMinutesFromNow = new Date(now.getTime() + 5 * 60 * 1000);
+  const refreshThreshold = new Date(now.getTime() + TOKEN_REFRESH_LEAD_MS);
 
-  // Check if token is expired or will expire in next 5 minutes
+  // Check if token is expired or will expire within the lead time
   // We refresh proactively to ensure the token never actually expires
-  if (oauthRecord.tokenExpiresAt > fiveMinutesFromNow) {
-    // Token is still valid for at least 5 more minutes
+  if (oauthRecord.tokenExpiresAt > refreshThreshold) {
+    // Token is still valid for longer than the lead time
     return {
       accessToken: oauthRecord.accessToken,
       refreshToken: oauthRecord.refreshToken,
@@ -262,7 +276,10 @@ let refreshTimeout: NodeJS.Timeout | null = null;
 
 /**
  * Schedule next OAuth token refresh
- * Schedules refresh for 10 minutes before token expiration
+ * Schedules refresh for TOKEN_REFRESH_LEAD_MS before token expiration.
+ * Always goes through a real timer (never recurses synchronously), with a
+ * minimum delay floor - so even if a refresh fails without advancing
+ * tokenExpiresAt (e.g. a revoked grant), this backs off instead of spinning.
  * Works with both active and inactive OAuth to attempt reactivation
  */
 export async function scheduleNextRefresh() {
@@ -276,31 +293,18 @@ export async function scheduleNextRefresh() {
     }
 
     const now = new Date();
-    const tenMinutesBeforeExpiry = new Date(oauth.tokenExpiresAt.getTime() - 10 * 60 * 1000);
-    const msUntilRefresh = tenMinutesBeforeExpiry.getTime() - now.getTime();
-
-    // If token expires in less than 10 minutes, refresh immediately
-    if (msUntilRefresh <= 0) {
-      logger.info('Token expires soon, refreshing immediately', {
-        expiresAt: oauth.tokenExpiresAt,
-        now: now
-      });
-      await validateOAuthToken();
-      // After refreshing, schedule the next one
-      await scheduleNextRefresh();
-      return;
-    }
+    const refreshAt = new Date(oauth.tokenExpiresAt.getTime() - TOKEN_REFRESH_LEAD_MS);
+    const msUntilRefresh = Math.max(refreshAt.getTime() - now.getTime(), MIN_REFRESH_RETRY_MS);
 
     // Clear any existing timeout
     if (refreshTimeout) {
       clearTimeout(refreshTimeout);
     }
 
-    // Schedule refresh for 10 minutes before expiration
     logger.info('Scheduled OAuth token refresh', {
       expiresAt: oauth.tokenExpiresAt,
-      refreshAt: tenMinutesBeforeExpiry,
-      msUntilRefresh: msUntilRefresh
+      refreshAt,
+      msUntilRefresh,
     });
 
     refreshTimeout = setTimeout(async () => {
