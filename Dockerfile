@@ -1,16 +1,16 @@
 # Stage 1: Build frontend
-FROM node:20-alpine AS frontend-builder
+FROM node:24-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
 COPY frontend/package*.json ./
-RUN npm install
+RUN npm ci
 
 COPY frontend/ ./
 RUN npm run build
 
 # Stage 2: Build backend
-FROM node:20-alpine AS backend-builder
+FROM node:24-alpine AS backend-builder
 
 # Install OpenSSL for Prisma
 RUN apk add --no-cache openssl
@@ -18,7 +18,7 @@ RUN apk add --no-cache openssl
 WORKDIR /app/backend
 
 COPY backend/package*.json ./
-RUN npm install
+RUN npm ci
 
 COPY backend/ ./
 RUN npx prisma generate
@@ -27,7 +27,7 @@ RUN NODE_OPTIONS="--max-old-space-size=2048" npm run build
 RUN npm prune --omit=dev
 
 # Stage 3: Production
-FROM node:20-alpine
+FROM node:24-alpine
 
 # Install OpenSSL for Prisma
 RUN apk add --no-cache openssl
