@@ -20,6 +20,7 @@ export interface OidcConfig {
   clientId: string;
   clientSecret: string;
   displayName: string;
+  requireVerifiedEmail: boolean;
 }
 
 export interface AppConfig {

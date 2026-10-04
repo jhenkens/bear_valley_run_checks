@@ -212,8 +212,13 @@ router.get('/oidc/callback', async (req, res) => {
 
     const info = await exchangeCodeForUserInfo(code, pending.codeVerifier);
     const email = info.email?.toLowerCase();
-    if (!email || info.email_verified === false) {
-      return loginError(res, 'Your account has no verified email address');
+    if (!email) {
+      logger.warn(`OIDC userinfo had no email claim (claims: ${Object.keys(info).join(', ')})`);
+      return loginError(res, 'Your account has no email address');
+    }
+    if (appConfig.oidc.requireVerifiedEmail && info.email_verified !== true) {
+      logger.warn(`OIDC email for ${email} is not verified (email_verified=${info.email_verified})`);
+      return loginError(res, 'Your email address is not verified');
     }
 
     const prisma = getPrismaClient();

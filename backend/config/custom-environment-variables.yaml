@@ -16,3 +16,6 @@ oidc:
   clientId: OIDC_CLIENT_ID
   clientSecret: OIDC_CLIENT_SECRET
   displayName: OIDC_NAME
+  requireVerifiedEmail:
+    __name: OIDC_REQUIRE_VERIFIED_EMAIL
+    __format: boolean

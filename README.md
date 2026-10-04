@@ -183,6 +183,8 @@ and only the magic link is offered.
 - Redirect URI to register with the provider: `<APP_URL>/auth/oidc/callback`.
 - The app uses the authorization-code flow with PKCE and reads `email` from the userinfo endpoint. As with
   magic links, the email must already belong to a user in the app; unknown emails are refused.
+- Set `OIDC_REQUIRE_VERIFIED_EMAIL=true` to also require the provider's `email_verified` claim to be `true`
+  (off by default: trust a provider that only releases verified emails).
 
 ### Run Configuration
 
