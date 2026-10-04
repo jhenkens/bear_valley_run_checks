@@ -1,12 +1,6 @@
 import { api, ApiError } from './services/api';
 import { connectSocket } from './services/socket';
 import { calculateRunColors, groupRunsBySection, formatTimeSince, RunWithColor } from './utils/colorLogic';
-import {
-  startAuthentication,
-  startRegistration,
-  browserSupportsWebAuthnAutofill,
-  browserSupportsWebAuthn,
-} from '@simplewebauthn/browser';
 
 export function createApp() {
   return {
@@ -15,12 +9,8 @@ export function createApp() {
     loading: true,
     error: null as string | null,
     user: null as any,
-    currentTab: 'runs' as 'runs' | 'history' | 'patrollers' | 'admin' | 'account',
-    passkeys: [] as any[],
-    passkeySupported: false,
-    isAddingPasskey: false,
-    newPasskeyName: '',
-    passkeyMessage: null as string | null,
+    currentTab: 'runs' as 'runs' | 'history' | 'patrollers' | 'admin',
+    oidcProvider: null as { name: string } | null,
     runs: [] as any[],
     checks: [] as any[],
     patrollers: [] as string[],
@@ -167,17 +157,14 @@ export function createApp() {
             // Failed to parse - not critical, will use default state
           }
         }
-        this.passkeySupported = browserSupportsWebAuthn();
+        this.showLoginErrorFromUrl();
         await this.checkAuth();
         if (this.user) {
           await this.loadData();
           connectSocket(this.handleNewCheck.bind(this), this.handleSocketReconnect.bind(this));
           this.setupVisibilityListener();
         } else {
-          // Fire-and-forget: registers the browser's passkey autofill
-          // listener on the login form's email input. Resolves only once
-          // the user actually picks a passkey, so it must not be awaited.
-          this.tryPasskeyAutofillLogin();
+          await this.loadLoginProviders();
         }
       } catch (err: any) {
         console.error('Init error:', err);
@@ -277,95 +264,27 @@ export function createApp() {
       }
     },
 
-    // Passkeys - login
-    async tryPasskeyAutofillLogin() {
-      try {
-        if (!(await browserSupportsWebAuthnAutofill())) {
-          return;
-        }
-
-        const optionsJSON = await api.getPasskeyAuthenticationOptions();
-        const response = await startAuthentication({ optionsJSON, useBrowserAutofill: true });
-        const { user } = await api.verifyPasskeyAuthentication(response);
-
-        this.user = user;
-        await this.loadData();
-        connectSocket(this.handleNewCheck.bind(this), this.handleSocketReconnect.bind(this));
-        this.setupVisibilityListener();
-      } catch (err: any) {
-        // The user dismissing the prompt (or no passkey being available) is
-        // routine, not an error worth surfacing.
-        if (err?.name !== 'NotAllowedError') {
-          console.error('Passkey autofill login error:', err);
-        }
+    // The OIDC callback redirects back here with ?login_error=... on failure.
+    showLoginErrorFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+      const loginError = params.get('login_error');
+      if (loginError) {
+        this.error = loginError;
+        window.history.replaceState({}, '', window.location.pathname);
       }
     },
 
-    async loginWithPasskey() {
-      if (this.isLoggingIn) return;
-
+    async loadLoginProviders() {
       try {
-        this.isLoggingIn = true;
-        this.error = null;
-        const optionsJSON = await api.getPasskeyAuthenticationOptions();
-        const response = await startAuthentication({ optionsJSON });
-        const { user } = await api.verifyPasskeyAuthentication(response);
-
-        this.user = user;
-        await this.loadData();
-        connectSocket(this.handleNewCheck.bind(this), this.handleSocketReconnect.bind(this));
-        this.setupVisibilityListener();
+        const { oidc } = await api.getLoginProviders();
+        this.oidcProvider = oidc;
       } catch (err: any) {
-        if (err?.name !== 'NotAllowedError') {
-          this.error = err.message || 'Passkey login failed';
-        }
-      } finally {
-        this.isLoggingIn = false;
+        console.error('Failed to load login providers:', err);
       }
     },
 
-    // Passkeys - management (once logged in)
-    async loadPasskeys() {
-      try {
-        const { passkeys } = await api.getPasskeys();
-        this.passkeys = passkeys;
-      } catch (err: any) {
-        this.error = err.message || 'Failed to load passkeys';
-      }
-    },
-
-    async addPasskey() {
-      if (this.isAddingPasskey) return;
-
-      try {
-        this.isAddingPasskey = true;
-        this.error = null;
-        this.passkeyMessage = null;
-
-        const optionsJSON = await api.getPasskeyRegistrationOptions();
-        const response = await startRegistration({ optionsJSON });
-        const name = this.newPasskeyName.trim() || `Passkey (${new Date().toLocaleDateString()})`;
-        await api.verifyPasskeyRegistration(response, name);
-
-        this.newPasskeyName = '';
-        this.passkeyMessage = 'Passkey added';
-        await this.loadPasskeys();
-      } catch (err: any) {
-        if (err?.name !== 'NotAllowedError') {
-          this.error = err.message || 'Failed to add passkey';
-        }
-      } finally {
-        this.isAddingPasskey = false;
-      }
-    },
-
-    async removePasskey(id: string) {
-      try {
-        await api.deletePasskey(id);
-        this.passkeys = this.passkeys.filter((p: any) => p.id !== id);
-      } catch (err: any) {
-        this.error = err.message || 'Failed to remove passkey';
-      }
+    loginWithOidc() {
+      window.location.href = '/auth/oidc/login';
     },
 
     // Tabs
@@ -376,9 +295,6 @@ export function createApp() {
       if (tab !== 'runs') {
         this.runSearchQuery = '';
         this.handleRunSearch();
-      }
-      if (tab === 'account' && this.passkeys.length === 0) {
-        this.loadPasskeys();
       }
     },
 

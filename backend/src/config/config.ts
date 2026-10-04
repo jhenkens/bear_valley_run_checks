@@ -15,6 +15,13 @@ export interface Superuser {
   name: string;
 }
 
+export interface OidcConfig {
+  issuer: string;
+  clientId: string;
+  clientSecret: string;
+  displayName: string;
+}
+
 export interface AppConfig {
   runProvider: 'config' | 'sheets';
   runs: Run[];
@@ -32,6 +39,7 @@ export interface AppConfig {
   emailFrom: string;
   appUrl: string;
   port: number;
+  oidc: OidcConfig;
 }
 
 function loadConfig(): AppConfig {
@@ -65,6 +73,7 @@ function loadConfig(): AppConfig {
     emailFrom: config.get<string>('emailFrom'),
     appUrl: config.get<string>('appUrl'),
     port: config.get<number>('port'),
+    oidc: config.get<OidcConfig>('oidc'),
   };
 }
 

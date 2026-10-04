@@ -1,10 +1,16 @@
-import { Router } from 'express';
+import crypto from 'crypto';
+import { Router, Response } from 'express';
 import { getPrismaClient } from '../config/database';
 import { generateMagicLink, validateToken } from '../auth/magicLink';
 import { sendMagicLink } from '../services/email';
 import { requireAuth, AuthRequest } from '../auth/middleware';
 import { appConfig } from '../config/config';
 import { logger } from '../utils/logger';
+import {
+  isOidcEnabled,
+  buildAuthorizationRequest,
+  exchangeCodeForUserInfo,
+} from '../services/oidc';
 
 const router = Router();
 
@@ -145,6 +151,97 @@ router.get('/verify', async (req, res) => {
   } catch (error) {
     logger.error('Verify error:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /auth/providers - Which login options the frontend should offer
+router.get('/providers', (_req, res) => {
+  res.json({
+    oidc: isOidcEnabled() ? { name: appConfig.oidc.displayName || 'Single Sign-On' } : null,
+  });
+});
+
+// Send the browser back to the login page with a message the frontend shows.
+function loginError(res: Response, message: string) {
+  res.redirect(`/?login_error=${encodeURIComponent(message)}`);
+}
+
+// GET /auth/oidc/login - Start the OIDC (Authentik) login
+router.get('/oidc/login', async (req, res) => {
+  if (!isOidcEnabled()) {
+    return res.status(404).json({ error: 'OIDC login is not configured' });
+  }
+  try {
+    const { url, state, codeVerifier } = await buildAuthorizationRequest();
+    req.session.oidc = { state, codeVerifier };
+    req.session.save((err) => {
+      if (err) {
+        logger.error('Session save error:', err);
+        return loginError(res, 'Failed to start sign-in');
+      }
+      res.redirect(url);
+    });
+  } catch (error) {
+    logger.error('OIDC login start error:', error);
+    loginError(res, 'Single sign-on is unavailable right now');
+  }
+});
+
+// GET /auth/oidc/callback - Finish the OIDC login and create a session
+router.get('/oidc/callback', async (req, res) => {
+  if (!isOidcEnabled()) {
+    return res.status(404).json({ error: 'OIDC login is not configured' });
+  }
+  const pending = req.session.oidc;
+  const { code, state, error: idpError } = req.query;
+
+  try {
+    if (idpError) {
+      logger.warn(`OIDC provider returned error: ${idpError}`);
+      return loginError(res, 'Sign-in was cancelled or denied');
+    }
+    if (
+      !pending ||
+      typeof code !== 'string' ||
+      typeof state !== 'string' ||
+      state.length !== pending.state.length ||
+      !crypto.timingSafeEqual(Buffer.from(state), Buffer.from(pending.state))
+    ) {
+      return loginError(res, 'Sign-in session expired, please try again');
+    }
+
+    const info = await exchangeCodeForUserInfo(code, pending.codeVerifier);
+    const email = info.email?.toLowerCase();
+    if (!email || info.email_verified === false) {
+      return loginError(res, 'Your account has no verified email address');
+    }
+
+    const prisma = getPrismaClient();
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      logger.warn(`OIDC login for unknown user ${email}`);
+      return loginError(res, `No run checks account for ${email}. Ask an administrator to add you.`);
+    }
+
+    // Regenerate session for security (also drops the pending OIDC state)
+    req.session.regenerate((err) => {
+      if (err) {
+        logger.error('Session regeneration error:', err);
+        return loginError(res, 'Failed to create session');
+      }
+      req.session.userId = user.id;
+      req.session.save((saveErr) => {
+        if (saveErr) {
+          logger.error('Session save error:', saveErr);
+          return loginError(res, 'Failed to create session');
+        }
+        logger.info(`User ${user.email} authenticated via OIDC`);
+        res.redirect('/');
+      });
+    });
+  } catch (error) {
+    logger.error('OIDC callback error:', error);
+    loginError(res, 'Sign-in failed, please try again');
   }
 });
 

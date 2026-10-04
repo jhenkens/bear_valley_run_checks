@@ -5,6 +5,14 @@ timezone: America/Los_Angeles
 enableLoginWithoutPassword: false
 disableMagicLink: false
 
+# Optional OpenID Connect sign-in (e.g. Authentik). Enabled when issuer, clientId and
+# clientSecret are all set; magic link login always stays available.
+oidc:
+  issuer: ''        # e.g. https://auth.example.com/application/o/runchecks/
+  clientId: ''
+  clientSecret: ''
+  displayName: Authentik   # Label on the sign-in button
+
 # Superusers (always have admin access, cannot be demoted or deleted)
 superusers:
   - email: admin@bearvalley.com

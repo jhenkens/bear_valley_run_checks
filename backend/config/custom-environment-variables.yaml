@@ -11,3 +11,8 @@ smtpPass: SMTP_PASS
 emailFrom: EMAIL_FROM
 appUrl: APP_URL
 port: PORT
+oidc:
+  issuer: OIDC_ISSUER
+  clientId: OIDC_CLIENT_ID
+  clientSecret: OIDC_CLIENT_SECRET
+  displayName: OIDC_NAME

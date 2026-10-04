@@ -7,6 +7,7 @@ Mobile-first web application for ski patrol to track run checks with real-time u
 ## Features
 
 - **Magic Link Authentication** - Passwordless email login
+- **Optional OpenID Connect sign-in** - e.g. Authentik, alongside the magic link
 - **Run Check Management** - Track run checks with timestamps
 - **Real-time Updates** - Socket.io for instant updates across devices
 - **Mobile-First Design** - Optimized for use on phones and tablets
@@ -19,7 +20,7 @@ Mobile-first web application for ski patrol to track run checks with real-time u
 - **Backend**: Node.js, Express, TypeScript, Prisma, Socket.io
 - **Frontend**: Alpine.js, TypeScript, Webpack
 - **Database**: SQLite (development), PostgreSQL (production recommended)
-- **Authentication**: Magic link via email
+- **Authentication**: Magic link via email, plus optional OpenID Connect (Authentik)
 
 ## Getting Started
 
@@ -169,6 +170,19 @@ Key variables:
 - `SMTP_*` - Email configuration for magic links
 - `RUN_PROVIDER` - `config` or `sheets`
 - `GOOGLE_*` - Google Sheets API credentials (if using sheets provider)
+- `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_NAME` - Optional OpenID Connect login (see below)
+
+### OpenID Connect (Authentik) sign-in
+
+When `OIDC_ISSUER`, `OIDC_CLIENT_ID` and `OIDC_CLIENT_SECRET` are all set, the login page shows a
+"Sign in with `OIDC_NAME`" button (default "Authentik") under the email magic-link form. Leave them unset
+and only the magic link is offered.
+
+- Issuer: the provider's issuer URL, e.g. `https://auth.example.com/application/o/runchecks/` (its
+  `/.well-known/openid-configuration` is used for discovery).
+- Redirect URI to register with the provider: `<APP_URL>/auth/oidc/callback`.
+- The app uses the authorization-code flow with PKCE and reads `email` from the userinfo endpoint. As with
+  magic links, the email must already belong to a user in the app; unknown emails are refused.
 
 ### Run Configuration
 

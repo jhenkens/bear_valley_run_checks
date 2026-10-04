@@ -14,7 +14,6 @@ import { logger } from './utils/logger';
 
 // Import routes
 import authRoutes from './routes/auth';
-import passkeyRoutes from './routes/passkeys';
 import runcheckRoutes from './routes/runchecks';
 import userRoutes from './routes/users';
 import googleRoutes from './routes/google';
@@ -55,7 +54,6 @@ app.use(createSessionMiddleware());
 
 // API Routes
 app.use('/auth', authRoutes);
-app.use('/auth/passkey', passkeyRoutes);
 app.use('/api', runcheckRoutes);
 app.use('/api', userRoutes);
 app.use('/api/google', googleRoutes);
