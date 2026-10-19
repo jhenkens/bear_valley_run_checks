@@ -353,13 +353,11 @@ if (appRoot) {
                         <span>
                           <button class="btn" @click="saveUser" style="font-size: 0.85rem; padding: 0.25rem 0.5rem;">Save</button>
                           <button class="btn" @click="cancelEdit" style="font-size: 0.85rem; padding: 0.25rem 0.5rem; background: #6c757d;">Cancel</button>
+                          <button class="btn btn-danger" @click="deleteUser(u)" style="font-size: 0.85rem; padding: 0.25rem 0.5rem;">Delete</button>
                         </span>
                       </template>
                       <template x-if="editingUserId !== u.id">
-                        <span>
-                          <button class="btn" @click="editUser(u)" :disabled="u.isSuperuser" style="font-size: 0.85rem; padding: 0.25rem 0.5rem;">Edit</button>
-                          <button class="btn-danger" @click="deleteUser(u)" :disabled="u.isSuperuser">Delete</button>
-                        </span>
+                        <button class="btn" @click="editUser(u)" :disabled="u.isSuperuser" style="font-size: 0.85rem; padding: 0.25rem 0.5rem;">Edit</button>
                       </template>
                     </td>
                   </tr>

@@ -640,6 +640,7 @@ export function createApp() {
         this.error = null;
         await api.deleteUser(user.id);
         this.showMessage('success', 'User deleted');
+        this.cancelEdit();
         await this.loadData();
       } catch (err: any) {
         this.error = err.message || 'Failed to delete user';
