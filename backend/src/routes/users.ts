@@ -81,26 +81,7 @@ router.post('/users', requireAdmin, async (req, res) => {
       },
     });
 
-    // Generate magic link and optionally send welcome email (only if email provided)
-    let message = 'User created';
-
-    if (emailLower) {
-      const token = await generateMagicLink(emailLower);
-
-      if (!appConfig.disableMagicLink) {
-        try {
-          await sendWelcomeEmail(emailLower, token);
-          message = 'User created and welcome email sent';
-        } catch (emailError) {
-          logger.error('Failed to send welcome email:', emailError);
-          message = 'User created (email sending failed - please check SMTP configuration)';
-        }
-      } else {
-        message = 'User created (email disabled in dev mode)';
-      }
-    } else {
-      message = 'User created (no email - login not available)';
-    }
+    const message = emailLower ? 'User created' : 'User created (no email - login not available)';
 
     res.json({
       user: {
@@ -118,7 +99,7 @@ router.post('/users', requireAdmin, async (req, res) => {
 // POST /api/users/bulk - Create many users from [{ name, email }]
 router.post('/users/bulk', requireAdmin, async (req, res) => {
   try {
-    const { users: rows, sendEmails } = req.body;
+    const { users: rows } = req.body;
 
     if (!Array.isArray(rows) || rows.length === 0) {
       return res.status(400).json({ error: 'No users provided' });
@@ -131,8 +112,6 @@ router.post('/users/bulk', requireAdmin, async (req, res) => {
     const seenEmails = new Set<string>();
     const created: { name: string; email: string | null }[] = [];
     const skipped: { name: string; email: string | null; reason: string }[] = [];
-    let emailsSent = 0;
-    let emailsFailed = 0;
 
     for (const row of rows) {
       const name = typeof row?.name === 'string' ? row.name.trim() : '';
@@ -160,21 +139,50 @@ router.post('/users/bulk', requireAdmin, async (req, res) => {
 
       await prisma.user.create({ data: { email, name, isAdmin: false } });
       created.push({ name, email });
+    }
 
-      if (email && sendEmails && !appConfig.disableMagicLink) {
-        try {
-          await sendWelcomeEmail(email, await generateMagicLink(email));
-          emailsSent++;
-        } catch (emailError) {
-          logger.error('Failed to send welcome email:', emailError);
-          emailsFailed++;
-        }
+    res.json({ created: created.length, skipped });
+  } catch (error) {
+    logger.error('Error bulk creating users:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/users/send-welcome - Send welcome emails to the given user ids
+router.post('/users/send-welcome', requireAdmin, async (req, res) => {
+  try {
+    const { userIds } = req.body;
+
+    if (!Array.isArray(userIds) || userIds.length === 0 || !userIds.every((id) => typeof id === 'string')) {
+      return res.status(400).json({ error: 'userIds must be a non-empty array' });
+    }
+    if (appConfig.disableMagicLink) {
+      return res.status(400).json({ error: 'Email is disabled in dev mode' });
+    }
+
+    const prisma = getPrismaClient();
+    const users = await prisma.user.findMany({ where: { id: { in: userIds } } });
+    let sent = 0;
+    let failed = 0;
+    let skipped = 0;
+
+    for (const user of users) {
+      if (!user.email) {
+        skipped++;
+        continue;
+      }
+      try {
+        await sendWelcomeEmail(user.email, await generateMagicLink(user.email));
+        sent++;
+      } catch (emailError) {
+        logger.error('Failed to send welcome email:', emailError);
+        failed++;
       }
     }
 
-    res.json({ created: created.length, skipped, emailsSent, emailsFailed });
+    res.json({ sent, failed, skipped });
   } catch (error) {
-    logger.error('Error bulk creating users:', error);
+    logger.error('Error sending welcome emails:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

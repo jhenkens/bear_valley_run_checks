@@ -31,7 +31,8 @@ export function createApp() {
     newUserName: '',
     editingUserId: null as string | null,
     bulkText: '',
-    bulkSendEmails: true,
+    userSort: { key: 'name', dir: 'asc' } as { key: 'name' | 'email' | 'createdAt'; dir: 'asc' | 'desc' },
+    welcomeSelected: {} as Record<string, boolean>,
     message: null as { type: 'success' | 'error' | 'warning'; text: string } | null,
     expandedSections: new Set<string>(),
     runSearchQuery: '',
@@ -44,9 +45,66 @@ export function createApp() {
 
     // Computed
     get sortedUsers() {
-      return [...this.users].sort((a, b) =>
-        a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) ||
-        (a.email || '').localeCompare(b.email || ''));
+      const { key, dir } = this.userSort;
+      const sign = dir === 'asc' ? 1 : -1;
+      return [...this.users].sort((a, b) => {
+        const cmp = key === 'createdAt'
+          ? new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          : (a[key] || '').localeCompare(b[key] || '', undefined, { sensitivity: 'base' });
+        return sign * cmp || a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+      });
+    },
+
+    sortUsersBy(key: 'name' | 'email' | 'createdAt') {
+      this.userSort = {
+        key,
+        dir: this.userSort.key === key && this.userSort.dir === 'asc' ? 'desc' : 'asc',
+      };
+    },
+
+    sortIndicator(key: string) {
+      return this.userSort.key === key ? (this.userSort.dir === 'asc' ? '▲' : '▼') : '';
+    },
+
+    formatUserDate(iso: string) {
+      return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+    },
+
+    // Only users with an email can receive a welcome email
+    get welcomeEligibleUsers() {
+      return this.users.filter(u => !!u.email);
+    },
+
+    get welcomeSelectedIds() {
+      return this.welcomeEligibleUsers.filter(u => this.welcomeSelected[u.id]).map(u => u.id as string);
+    },
+
+    get allWelcomeSelected() {
+      return this.welcomeEligibleUsers.length > 0 &&
+        this.welcomeSelectedIds.length === this.welcomeEligibleUsers.length;
+    },
+
+    toggleAllWelcome() {
+      const select = !this.allWelcomeSelected;
+      const next: Record<string, boolean> = {};
+      if (select) for (const u of this.welcomeEligibleUsers) next[u.id] = true;
+      this.welcomeSelected = next;
+    },
+
+    async sendWelcomeEmails() {
+      const ids = this.welcomeSelectedIds;
+      if (ids.length === 0) return;
+      if (!confirm(`Send welcome email to ${ids.length} user${ids.length !== 1 ? 's' : ''}?`)) return;
+      try {
+        this.error = null;
+        const res = await api.sendWelcomeEmails(ids);
+        const parts = [`${res.sent} welcome email(s) sent`];
+        if (res.failed) parts.push(`${res.failed} failed`);
+        this.showMessage(res.failed ? 'warning' : 'success', parts.join('. '));
+        this.welcomeSelected = {};
+      } catch (err: any) {
+        this.error = err.message || 'Failed to send welcome emails';
+      }
     },
 
     // Lowercased names/emails that appear on more than one user
@@ -458,7 +516,7 @@ export function createApp() {
         }
 
         await api.createUser(this.newUserEmail, this.newUserName);
-        this.showMessage('success', this.newUserEmail ? 'User created and welcome email sent' : 'User created');
+        this.showMessage('success', 'User created');
         this.newUserEmail = '';
         this.newUserName = '';
         await this.loadData();
@@ -514,15 +572,13 @@ export function createApp() {
           this.error = 'Nothing to upload';
           return;
         }
-        const res = await api.bulkCreateUsers(rows, this.bulkSendEmails);
+        const res = await api.bulkCreateUsers(rows);
         const parts = [`Created ${res.created} user(s)`];
-        if (this.bulkSendEmails) parts.push(`${res.emailsSent} welcome email(s) sent`);
-        if (res.emailsFailed) parts.push(`${res.emailsFailed} email(s) failed`);
         if (res.skipped.length) {
           parts.push(`Skipped ${res.skipped.length}: ` +
             res.skipped.map(s => `${s.name || s.email || '(blank)'} (${s.reason})`).join('; '));
         }
-        this.showMessage(res.skipped.length || res.emailsFailed ? 'warning' : 'success', parts.join('. '));
+        this.showMessage(res.skipped.length ? 'warning' : 'success', parts.join('. '));
         // Keep only the skipped rows in the box so they can be fixed and retried
         this.bulkText = res.skipped.map(s => `${s.name},${s.email || ''}`).join('\n');
         await this.loadData();

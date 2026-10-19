@@ -98,15 +98,20 @@ export const api = {
     });
   },
 
-  async bulkCreateUsers(users: { name: string; email: string }[], sendEmails: boolean) {
+  async bulkCreateUsers(users: { name: string; email: string }[]) {
     return fetchJSON<{
       created: number;
       skipped: { name: string; email: string | null; reason: string }[];
-      emailsSent: number;
-      emailsFailed: number;
     }>(`${API_BASE}/users/bulk`, {
       method: 'POST',
-      body: JSON.stringify({ users, sendEmails }),
+      body: JSON.stringify({ users }),
+    });
+  },
+
+  async sendWelcomeEmails(userIds: string[]) {
+    return fetchJSON<{ sent: number; failed: number; skipped: number }>(`${API_BASE}/users/send-welcome`, {
+      method: 'POST',
+      body: JSON.stringify({ userIds }),
     });
   },
 

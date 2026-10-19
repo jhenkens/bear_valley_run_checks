@@ -520,8 +520,31 @@ body {
 .user-table {
   background: white;
   border-radius: 4px;
-  overflow: hidden;
+  overflow-x: auto;
   margin-bottom: 1rem;
+}
+
+.user-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.user-table th,
+.user-table td {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+  white-space: nowrap;
+}
+
+.user-table th {
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.user-table th.sortable {
+  cursor: pointer;
+  user-select: none;
 }
 
 .user-row {
@@ -565,9 +588,8 @@ body {
   margin-left: 0.5rem;
 }
 
-.user-actions {
-  display: flex;
-  gap: 0.5rem;
+.user-actions > * {
+  margin-right: 0.5rem;
 }
 
 .user-actions button {
