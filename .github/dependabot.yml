@@ -1,28 +1,54 @@
 version: 2
+# One grouped PR per ecosystem per week, minor/patch only, and each release has to be a
+# week old before it is proposed (time for a bad release to be yanked). Major versions are
+# never proposed: upgrade those by hand. Passing PRs are merged by pr-checks.yml.
 updates:
   - package-ecosystem: npm
     directory: /backend
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
-      backend-minor-patch:
+      backend:
         update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: /frontend
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
-      frontend-minor-patch:
+      frontend:
         update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   # Keeps the SHA-pinned actions in .github/workflows current
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: docker
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
