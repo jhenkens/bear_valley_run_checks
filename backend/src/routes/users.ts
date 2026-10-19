@@ -190,7 +190,7 @@ router.post('/users/send-welcome', requireAdmin, async (req, res) => {
 // PATCH /api/users/:id - Update user (name and/or email)
 router.patch('/users/:id', requireAdmin, async (req, res) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as { id: string };
     const { name, email } = req.body;
 
     const prisma = getPrismaClient();
@@ -263,7 +263,7 @@ router.patch('/users/:id', requireAdmin, async (req, res) => {
 // PATCH /api/users/:id/admin - Toggle admin status
 router.patch('/users/:id/admin', requireAdmin, async (req, res) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as { id: string };
     const { isAdmin } = req.body;
 
     if (typeof isAdmin !== 'boolean') {
@@ -304,7 +304,7 @@ router.patch('/users/:id/admin', requireAdmin, async (req, res) => {
 // DELETE /api/users/:id - Delete user
 router.delete('/users/:id', requireAdmin, async (req, res) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params as { id: string };
 
     const prisma = getPrismaClient();
     const user = await prisma.user.findUnique({

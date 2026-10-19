@@ -26,7 +26,7 @@ Mobile-first web application for ski patrol to track run checks with real-time u
 
 ### Prerequisites
 
-- Node.js 18+ (Node.js 20+ recommended for production)
+- Node.js 24+ (the production image uses Node 26)
 - npm or yarn
 
 ### Quick Start (Development - No External Dependencies Required!)

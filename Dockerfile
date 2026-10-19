@@ -1,5 +1,5 @@
 # Stage 1: Build frontend
-FROM node:24-alpine AS frontend-builder
+FROM node:26-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
@@ -10,7 +10,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # Stage 2: Build backend
-FROM node:24-alpine AS backend-builder
+FROM node:26-alpine AS backend-builder
 
 # Install OpenSSL for Prisma
 RUN apk add --no-cache openssl
@@ -21,13 +21,14 @@ COPY backend/package*.json ./
 RUN npm ci
 
 COPY backend/ ./
-RUN npx prisma generate
+# generate never opens the database, but prisma.config.ts requires the variable to be set
+RUN DATABASE_URL=file:/tmp/generate.db npx prisma generate
 # Increase Node memory limit for TypeScript compilation
 RUN NODE_OPTIONS="--max-old-space-size=2048" npm run build
 RUN npm prune --omit=dev
 
 # Stage 3: Production
-FROM node:24-alpine
+FROM node:26-alpine
 
 # Install OpenSSL for Prisma
 RUN apk add --no-cache openssl su-exec
@@ -40,8 +41,9 @@ COPY --from=backend-builder /app/backend/node_modules ./node_modules
 # Copy built backend
 COPY --from=backend-builder /app/backend/dist ./dist
 
-# Copy Prisma schema and migrations
+# Copy Prisma schema, migrations and config (prisma migrate deploy needs all three)
 COPY backend/prisma ./prisma
+COPY backend/prisma.config.ts ./prisma.config.ts
 
 # Copy built frontend
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist

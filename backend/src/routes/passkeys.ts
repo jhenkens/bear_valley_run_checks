@@ -60,7 +60,7 @@ router.patch('/:id', requireAuth, async (req: AuthRequest, res) => {
     const pending = req.session.passkeyRename;
     const valid =
       pending &&
-      pending.id === req.params.id &&
+      pending.id === (req.params.id as string) &&
       pending.expiresAt > Date.now() &&
       pending.token.length === token.length &&
       crypto.timingSafeEqual(Buffer.from(pending.token), Buffer.from(token));
@@ -69,12 +69,12 @@ router.patch('/:id', requireAuth, async (req: AuthRequest, res) => {
     }
 
     const prisma = getPrismaClient();
-    const authenticator = await prisma.authenticator.findUnique({ where: { id: req.params.id } });
+    const authenticator = await prisma.authenticator.findUnique({ where: { id: (req.params.id as string) } });
     if (!authenticator || authenticator.userId !== req.user!.id) {
       return res.status(404).json({ error: 'Passkey not found' });
     }
 
-    await prisma.authenticator.update({ where: { id: req.params.id }, data: { name } });
+    await prisma.authenticator.update({ where: { id: (req.params.id as string) }, data: { name } });
     delete req.session.passkeyRename; // single use
     req.session.save((err) => {
       if (err) {
@@ -92,14 +92,14 @@ router.patch('/:id', requireAuth, async (req: AuthRequest, res) => {
 router.delete('/:id', requireAuth, async (req: AuthRequest, res) => {
   try {
     const prisma = getPrismaClient();
-    const authenticator = await prisma.authenticator.findUnique({ where: { id: req.params.id } });
+    const authenticator = await prisma.authenticator.findUnique({ where: { id: (req.params.id as string) } });
 
     if (!authenticator || authenticator.userId !== req.user!.id) {
       return res.status(404).json({ error: 'Passkey not found' });
     }
 
-    await prisma.authenticator.delete({ where: { id: req.params.id } });
-    logger.info('Passkey deleted', { userId: req.user!.id, authenticatorId: req.params.id });
+    await prisma.authenticator.delete({ where: { id: (req.params.id as string) } });
+    logger.info('Passkey deleted', { userId: req.user!.id, authenticatorId: (req.params.id as string) });
     res.json({ message: 'Passkey removed' });
   } catch (error) {
     logger.error('Error deleting passkey:', error);

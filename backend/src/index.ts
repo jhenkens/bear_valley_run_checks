@@ -70,6 +70,11 @@ app.use(morgan(morganFormat, {
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+// Express 5 leaves req.body undefined when a request has no body; handlers expect {} as in Express 4.
+app.use((req, _res, next) => {
+  req.body ??= {};
+  next();
+});
 app.use(createSessionMiddleware());
 
 // API Routes
@@ -85,7 +90,7 @@ if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../frontend/dist')));
   // Serve index.html from public
   app.use(express.static(path.join(__dirname, '../frontend/public')));
-  app.get('*', (req, res) => {
+  app.get('/{*splat}', (req, res) => {
     res.sendFile(path.join(__dirname, '../frontend/public/index.html'));
   });
 }
