@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { Router, Response } from 'express';
+import { rateLimit } from 'express-rate-limit';
 import { getPrismaClient } from '../config/database';
 import { generateMagicLink, validateToken } from '../auth/magicLink';
 import { sendMagicLink } from '../services/email';
@@ -57,8 +58,21 @@ if (appConfig.enableLoginWithoutPassword) {
   });
 }
 
+// Limit magic link requests per IP and per email address (email bombing / enumeration)
+const loginLimiterOptions = { windowMs: 15 * 60 * 1000, standardHeaders: true, legacyHeaders: false } as const;
+const loginIpLimiter = rateLimit({ ...loginLimiterOptions, limit: 20 });
+const loginEmailLimiter = rateLimit({
+  ...loginLimiterOptions,
+  limit: 5,
+  keyGenerator: (req) => String(req.body?.email || '').toLowerCase() || 'none',
+  validate: { keyGeneratorIpFallback: false },
+});
+
+// Same answer whether or not the address has an account, so this can't be used to find members
+const MAGIC_LINK_SENT = { message: 'If that email has an account, a login link is on its way' };
+
 // POST /auth/login - Request magic link
-router.post('/login', async (req, res) => {
+router.post('/login', loginIpLimiter, loginEmailLimiter, async (req, res) => {
   try {
     const { email } = req.body;
 
@@ -71,29 +85,25 @@ router.post('/login', async (req, res) => {
       where: { email: email.toLowerCase() },
     });
 
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    if (user.oidcOnly) {
-      return res.status(403).json({ error: 'This account signs in with single sign-on. Use the single sign-on button instead.' });
+    // Unknown address, or an account that signs in with single sign-on: say nothing different
+    if (!user || user.oidcOnly) {
+      return res.json(MAGIC_LINK_SENT);
     }
 
     // Generate magic link
     const token = await generateMagicLink(email.toLowerCase());
-    
+
     // Send magic link email unless disabled
     if (!appConfig.disableMagicLink) {
       try {
         await sendMagicLink(email.toLowerCase(), token);
-        res.json({ message: 'Magic link sent to your email' });
       } catch (emailError) {
         logger.error('Failed to send magic link email:', emailError);
-        res.status(500).json({ error: 'Failed to send email. Please contact an administrator.' });
       }
+      res.json(MAGIC_LINK_SENT);
     } else {
       // In dev mode with email disabled, return the token directly
-      res.json({ 
+      res.json({
         message: 'Magic link generated (email disabled in dev mode)',
         token,
         loginUrl: `${appConfig.appUrl}/auth/verify?token=${token}`
@@ -105,19 +115,43 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// GET /auth/verify - Verify magic link token
-router.get('/verify', async (req, res) => {
-  try {
-    const { token } = req.query;
+const TOKEN_PATTERN = /^[a-f0-9]{64}$/;
 
-    if (!token || typeof token !== 'string') {
-      return res.status(400).json({ error: 'Token is required' });
+// GET /auth/verify - Landing page for the emailed link. It deliberately does NOT consume the
+// token: mail scanners and link previews fetch GET links automatically and would burn it.
+// The person has to press the button, which POSTs the token back.
+router.get('/verify', (req, res) => {
+  const { token } = req.query;
+  if (typeof token !== 'string' || !TOKEN_PATTERN.test(token)) {
+    return loginError(res, 'That login link is invalid');
+  }
+  res.set('Cache-Control', 'no-store');
+  res.type('html').send(`<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Log in - Bear Valley Run Checks</title>
+<style>body{font-family:-apple-system,system-ui,sans-serif;background:#f5f5f5;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0}
+.card{background:#fff;padding:2rem;border-radius:8px;max-width:340px;width:calc(100% - 2rem);text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.15)}
+button{background:#3498db;color:#fff;border:0;border-radius:4px;padding:.9rem 1rem;font-size:1.1rem;width:100%;margin-top:1rem}</style></head>
+<body><form class="card" method="POST" action="/auth/verify">
+<h2>Bear Valley Run Checks</h2><p>Tap below to finish logging in.</p>
+<input type="hidden" name="token" value="${token}">
+<button type="submit">Log in</button></form></body></html>`);
+});
+
+// POST /auth/verify - Verify magic link token and start a session
+router.post('/verify', loginIpLimiter, async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (typeof token !== 'string' || !TOKEN_PATTERN.test(token)) {
+      return loginError(res, 'That login link is invalid');
     }
 
     const email = await validateToken(token);
 
     if (!email) {
-      return res.status(401).json({ error: 'Invalid or expired token' });
+      return loginError(res, 'That login link is invalid or has expired');
     }
 
     const prisma = getPrismaClient();
@@ -125,19 +159,15 @@ router.get('/verify', async (req, res) => {
       where: { email },
     });
 
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    if (user.oidcOnly) {
-      return res.status(403).json({ error: 'This account signs in with single sign-on' });
+    if (!user || user.oidcOnly) {
+      return loginError(res, 'That login link is invalid or has expired');
     }
 
     // Regenerate session for security
     req.session.regenerate((err) => {
       if (err) {
         logger.error('Session regeneration error:', err);
-        return res.status(500).json({ error: 'Failed to create session' });
+        return loginError(res, 'Failed to create session');
       }
 
       // Set session user ID
@@ -148,18 +178,16 @@ router.get('/verify', async (req, res) => {
       req.session.save((saveErr) => {
         if (saveErr) {
           logger.error('Session save error:', saveErr);
-          return res.status(500).json({ error: 'Failed to save session' });
+          return loginError(res, 'Failed to save session');
         }
-        
-        logger.info(`Session saved for user ${user.email}, redirecting to /`);
-        // Redirect to main app after session is saved; the flag lets the frontend
-        // offer to save a passkey after a magic link login
+
+        // The flag lets the frontend offer to save a passkey after a magic link login
         res.redirect('/?login=magic');
       });
     });
   } catch (error) {
     logger.error('Verify error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    loginError(res, 'Sign-in failed, please try again');
   }
 });
 
@@ -269,8 +297,8 @@ router.get('/oidc/callback', async (req, res) => {
   }
 });
 
-// GET /auth/logout - Logout
-router.get('/logout', (req, res) => {
+// POST /auth/logout - Logout (POST so another site can't log people out with a link or image)
+router.post('/logout', (req, res) => {
   req.session.destroy((err) => {
     if (err) {
       return res.status(500).json({ error: 'Failed to logout' });

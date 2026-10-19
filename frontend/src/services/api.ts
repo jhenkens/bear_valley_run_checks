@@ -56,7 +56,7 @@ export const api = {
   },
 
   async logout() {
-    return fetchJSON<{ message: string }>(`${AUTH_BASE}/logout`);
+    return fetchJSON<{ message: string }>(`${AUTH_BASE}/logout`, { method: 'POST' });
   },
 
   async getMe() {

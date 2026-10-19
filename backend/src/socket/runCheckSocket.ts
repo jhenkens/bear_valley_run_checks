@@ -1,5 +1,6 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { Server as HTTPServer } from 'http';
+import { createSessionMiddleware } from '../auth/session';
 import { logger } from '../utils/logger';
 
 export function setupSocket(server: HTTPServer): SocketIOServer {
@@ -10,6 +11,15 @@ export function setupSocket(server: HTTPServer): SocketIOServer {
         : ['http://localhost:8080', 'http://localhost:3000'],
       credentials: true,
     },
+  });
+
+  // Only logged-in users may connect: run to read the session cookie, then check it
+  const sessionMiddleware = createSessionMiddleware();
+  io.engine.use(sessionMiddleware);
+  io.use((socket, next) => {
+    const session = (socket.request as any).session;
+    if (session?.userId) return next();
+    next(new Error('Authentication required'));
   });
 
   io.on('connection', (socket) => {

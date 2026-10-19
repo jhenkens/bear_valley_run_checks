@@ -593,6 +593,41 @@ export function createApp() {
       }
     },
 
+    // Template helpers: Alpine's CSP build can't run `?.`, `new Date(...)` or multi-statement
+    // expressions inline, so the template calls these instead.
+    oidcButtonLabel(): string {
+      return 'Sign in with ' + (this.oidcProvider ? this.oidcProvider.name : '');
+    },
+
+    userName(): string {
+      return this.user ? this.user.name : '';
+    },
+
+    userEmailLabel(): string {
+      return this.user && this.user.email ? ' (' + this.user.email + ')' : '';
+    },
+
+    messageClass(): string {
+      return 'message ' + (this.message ? this.message.type : '');
+    },
+
+    clearRunSearch() {
+      this.runSearchQuery = '';
+      this.handleRunSearch();
+    },
+
+    formatClockTime(epochMs: number | string): string {
+      return new Date(epochMs).toLocaleTimeString();
+    },
+
+    passkeyDetails(passkey: any): string {
+      let text = 'Added ' + new Date(passkey.createdAt).toLocaleDateString();
+      if (passkey.lastUsedAt) {
+        text += ' · last used ' + new Date(passkey.lastUsedAt).toLocaleDateString();
+      }
+      return text;
+    },
+
     // Tabs
     switchTab(tab: typeof this.currentTab) {
       this.currentTab = tab;

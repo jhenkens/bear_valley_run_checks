@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { Router, Request } from 'express';
 import { google } from 'googleapis';
 import { requireAuth, requireAdmin } from '../auth/middleware';
@@ -31,22 +32,39 @@ const SCOPES = [
 
 // GET /api/google/oauth/authorize - Start OAuth flow
 router.get('/oauth/authorize', requireAuth, requireAdmin, (req, res) => {
+  // Random single-use state (CSRF protection); never the session id, which would leak to Google
+  const state = crypto.randomBytes(24).toString('hex');
+  req.session.googleOAuthState = state;
+
   const authUrl = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: SCOPES,
     prompt: 'consent', // Force consent screen to get refresh token
-    state: req.session.id, // CSRF protection
+    state,
   });
 
-  res.redirect(authUrl);
+  req.session.save((err) => {
+    if (err) {
+      logger.error('Failed to save Google OAuth state:', err);
+      return res.status(500).send('Failed to start Google sign-in');
+    }
+    res.redirect(authUrl);
+  });
 });
 
 // GET /api/google/oauth/callback - Handle OAuth callback
-router.get('/oauth/callback', requireAuth, async (req, res) => {
+router.get('/oauth/callback', requireAuth, requireAdmin, async (req, res) => {
   const { code, state } = req.query;
 
-  // Verify state matches session ID (CSRF protection)
-  if (state !== req.session.id) {
+  // Verify state matches the one issued for this session (CSRF protection), once only
+  const expected = req.session.googleOAuthState;
+  delete req.session.googleOAuthState;
+  if (
+    !expected ||
+    typeof state !== 'string' ||
+    state.length !== expected.length ||
+    !crypto.timingSafeEqual(Buffer.from(state), Buffer.from(expected))
+  ) {
     return res.status(400).send('Invalid state parameter');
   }
 

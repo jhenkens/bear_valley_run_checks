@@ -1,6 +1,9 @@
 import crypto from 'crypto';
 import { getPrismaClient } from '../config/database';
 
+// Only a hash is stored, so a database leak can't be replayed as login links
+const hashToken = (token: string) => crypto.createHash('sha256').update(token).digest('hex');
+
 const MAGIC_LINK_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 
 export async function generateMagicLink(email: string): Promise<string> {
@@ -10,7 +13,7 @@ export async function generateMagicLink(email: string): Promise<string> {
 
   await prisma.magicLink.create({
     data: {
-      token,
+      token: hashToken(token),
       email,
       expiresAt,
       used: false,
@@ -24,7 +27,7 @@ export async function validateToken(token: string): Promise<string | null> {
   const prisma = getPrismaClient();
 
   const magicLink = await prisma.magicLink.findUnique({
-    where: { token },
+    where: { token: hashToken(token) },
   });
 
   if (!magicLink) {
@@ -41,7 +44,7 @@ export async function validateToken(token: string): Promise<string | null> {
 
   // Mark as used
   await prisma.magicLink.update({
-    where: { token },
+    where: { id: magicLink.id },
     data: { used: true },
   });
 

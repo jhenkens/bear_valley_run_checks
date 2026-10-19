@@ -78,4 +78,25 @@ function loadConfig(): AppConfig {
   };
 }
 
+const DEFAULT_SESSION_SECRETS = ['change-this-secret', 'change-this-to-a-random-secret-in-production'];
+
+// Refuse to boot production with dev settings, rather than silently running insecure.
+function assertSafeForProduction(cfg: AppConfig): void {
+  if (process.env.NODE_ENV !== 'production') return;
+  const problems: string[] = [];
+  if (DEFAULT_SESSION_SECRETS.includes(cfg.sessionSecret) || cfg.sessionSecret.length < 32) {
+    problems.push('SESSION_SECRET must be set to a random value of at least 32 characters');
+  }
+  if (cfg.enableLoginWithoutPassword) {
+    problems.push('enableLoginWithoutPassword must be false (it allows login without any credential)');
+  }
+  if (!process.env.APP_URL) {
+    problems.push('APP_URL must be set');
+  }
+  if (problems.length > 0) {
+    throw new Error(`Unsafe production configuration:\n - ${problems.join('\n - ')}`);
+  }
+}
+
 export const appConfig = loadConfig();
+assertSafeForProduction(appConfig);

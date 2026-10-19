@@ -30,7 +30,7 @@ RUN npm prune --omit=dev
 FROM node:24-alpine
 
 # Install OpenSSL for Prisma
-RUN apk add --no-cache openssl
+RUN apk add --no-cache openssl su-exec
 
 WORKDIR /app
 
@@ -56,7 +56,7 @@ COPY backend/entrypoint.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
 
 # Create data directory for SQLite and sessions
-RUN mkdir -p /app/data
+RUN mkdir -p /app/data && chown -R node:node /app/data
 
 # Expose port
 EXPOSE 3000

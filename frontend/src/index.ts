@@ -1,10 +1,11 @@
 import './styles/main.css';
+import Alpine from '@alpinejs/csp';
 import { createApp } from './app';
 
-// Define Alpine component
-document.addEventListener('alpine:init', () => {
-  (window as any).Alpine.data('app', createApp);
-});
+// Alpine's CSP build: expressions are parsed (no eval), so the page can run under a strict
+// Content-Security-Policy. Keep template expressions simple - no arrow functions, template
+// literals, `?.`, `new`, or globals; put that logic in methods on the component instead.
+Alpine.data('app', createApp);
 
 // Render app
 const appRoot = document.getElementById('app');
@@ -48,7 +49,7 @@ if (appRoot) {
         <div x-show="oidcProvider" style="margin-top: 1.5rem; text-align: center;">
           <div style="color: #666; font-size: 0.9em; margin-bottom: 0.75rem;">or</div>
           <button class="btn" @click="loginWithOidc" style="background: #6c757d;">
-            <span x-text="'Sign in with ' + (oidcProvider?.name || '')"></span>
+            <span x-text="oidcButtonLabel()"></span>
           </button>
         </div>
 
@@ -66,7 +67,7 @@ if (appRoot) {
               Last updated: <span x-text="lastUpdated ? lastUpdated.toLocaleTimeString() : ''"></span>
             </div>
             <div class="header-user" x-show="user">
-              Signed in as <strong x-text="user?.name"></strong><span x-show="user?.email" x-text="' (' + user?.email + ')'"></span>
+              Signed in as <strong x-text="userName()"></strong><span x-show="user && user.email" x-text="userEmailLabel()"></span>
             </div>
           </div>
           <button @click="logout">Logout</button>
@@ -99,7 +100,7 @@ if (appRoot) {
         </div>
 
         <!-- Message -->
-        <div x-show="message" :class="'message ' + (message?.type || '')" x-text="message?.text" style="margin: 1rem;"></div>
+        <div x-show="message" :class="messageClass()" x-text="message && message.text" style="margin: 1rem;"></div>
 
         <!-- Tabs -->
         <div class="tabs" x-show="!showConfirm">
@@ -107,7 +108,7 @@ if (appRoot) {
           <button class="tab" :class="currentTab === 'history' && 'active'" @click="switchTab('history')">History</button>
           <button class="tab" :class="currentTab === 'patrollers' && 'active'" @click="switchTab('patrollers')">Patrollers</button>
           <button class="tab" :class="currentTab === 'account' && 'active'" @click="switchTab('account')">Account</button>
-          <button class="tab" :class="currentTab === 'admin' && 'active'" @click="switchTab('admin')" x-show="user?.isAdmin">Admin</button>
+          <button class="tab" :class="currentTab === 'admin' && 'active'" @click="switchTab('admin')" x-show="user && user.isAdmin">Admin</button>
         </div>
 
         <!-- Runs Tab -->
@@ -124,7 +125,7 @@ if (appRoot) {
               >
               <button
                 x-show="runSearchQuery"
-                @click="runSearchQuery = ''; handleRunSearch()"
+                @click="clearRunSearch"
                 class="search-clear"
                 aria-label="Clear search"
               >
@@ -227,7 +228,7 @@ if (appRoot) {
                         <div class="run-name" x-text="run.runName"></div>
                         <div x-show="run.checks.length === 0" class="run-time" style="color: #999; font-style: italic;">No checks</div>
                         <template x-for="check in run.checks" :key="check.id">
-                        <div class="run-time" x-text="new Date(check.checkTime).toLocaleTimeString() + ' - ' + check.patroller"></div>
+                        <div class="run-time" x-text="formatClockTime(check.checkTime) + ' - ' + check.patroller"></div>
                         </template>
                     </div>
                   </div>
@@ -252,7 +253,7 @@ if (appRoot) {
                 <template x-for="check in patrollerChecks" :key="check.id">
                   <div class="history-item">
                     <div class="history-run" x-text="check.runName + ' (' + check.section + ')'"></div>
-                    <div class="history-details" x-text="new Date(check.checkTime).toLocaleTimeString()"></div>
+                    <div class="history-details" x-text="formatClockTime(check.checkTime)"></div>
                   </div>
                 </template>
               </div>
@@ -274,7 +275,7 @@ if (appRoot) {
               <div class="history-item" style="display: flex; justify-content: space-between; align-items: center;">
                 <div>
                   <div class="history-run" x-text="passkey.name"></div>
-                  <div class="history-details" x-text="'Added ' + new Date(passkey.createdAt).toLocaleDateString() + (passkey.lastUsedAt ? ' · last used ' + new Date(passkey.lastUsedAt).toLocaleDateString() : '')"></div>
+                  <div class="history-details" x-text="passkeyDetails(passkey)"></div>
                 </div>
                 <button class="btn" style="background: #dc3545; width: auto; padding: 0.4rem 0.8rem;" @click="removePasskey(passkey.id)">Remove</button>
               </div>
@@ -298,20 +299,20 @@ if (appRoot) {
         </div>
 
         <!-- Admin Tab -->
-        <template x-if="currentTab === 'admin' && user?.isAdmin">
+        <template x-if="currentTab === 'admin' && user && user.isAdmin">
         <div class="content">
           <!-- Google Drive OAuth Section (Superuser only) -->
-          <details class="confirm-list collapsible" style="margin-bottom: 2rem;" x-show="user?.isSuperuser">
+          <details class="confirm-list collapsible" style="margin-bottom: 2rem;" x-show="user && user.isSuperuser">
             <summary><h3>Google Drive Connection</h3></summary>
             
-            <template x-if="!googleOAuthStatus?.configured">
+            <template x-if="!googleOAuthStatus || !googleOAuthStatus.configured">
               <div>
                 <p>Link your Google Drive account to store daily run check spreadsheets.</p>
                 <button class="btn" @click="linkGoogleDrive">Link Google Drive</button>
               </div>
             </template>
 
-            <template x-if="googleOAuthStatus?.configured">
+            <template x-if="googleOAuthStatus && googleOAuthStatus.configured">
               <div>
                 <div class="oauth-status">
                   <div class="oauth-info">
@@ -319,7 +320,7 @@ if (appRoot) {
                       <span x-show="googleOAuthStatus.isActive" style="color: green;">✅ Connected</span>
                       <span x-show="!googleOAuthStatus.isActive" style="color: orange;">⚠️ Disconnected</span>
                     </div>
-                    <div><strong>Linked by:</strong> <span x-text="googleOAuthStatus.linkedUser?.email"></span></div>
+                    <div><strong>Linked by:</strong> <span x-text="googleOAuthStatus.linkedUser && googleOAuthStatus.linkedUser.email"></span></div>
                     <div><strong>Google Account:</strong> <span x-text="googleOAuthStatus.googleEmail"></span></div>
                     <div x-show="googleOAuthStatus.folderId"><strong>Folder:</strong> <span x-text="googleOAuthStatus.folderId"></span></div>
                   </div>
@@ -332,7 +333,7 @@ if (appRoot) {
                 <div class="oauth-actions" style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
                   <button class="btn" @click="refreshGoogleToken">Refresh Connection & Reload Runs</button>
                   <button class="btn-danger" @click="disconnectGoogle">Disconnect</button>
-                  <button class="btn" style="background: #9e9e9e;" @click="testMarkInactive" x-show="user?.isSuperuser">🧪 Test: Force Inactive</button>
+                  <button class="btn" style="background: #9e9e9e;" @click="testMarkInactive" x-show="user && user.isSuperuser">🧪 Test: Force Inactive</button>
                 </div>
               </div>
             </template>
@@ -458,3 +459,6 @@ if (appRoot) {
     </div>
   `;
 }
+
+// Start after the template is in the DOM
+Alpine.start();

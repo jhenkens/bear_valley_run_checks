@@ -7,6 +7,7 @@ declare module 'express-session' {
     userId: string;
     oidc?: { state: string; codeVerifier: string };
     currentChallenge?: string;
+    googleOAuthState?: string;
     passkeyRename?: { id: string; token: string; expiresAt: number };
   }
 }

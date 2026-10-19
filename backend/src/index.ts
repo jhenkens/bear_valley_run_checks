@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import http from 'http';
 import path from 'path';
 import morgan from 'morgan';
@@ -25,16 +26,34 @@ const io = setupSocket(server);
 
 // Trust proxies (Cloudflare Tunnel + Traefik = 2 proxies)
 if (process.env.NODE_ENV === 'production') {
-  app.set('trust proxy', true); // Trust all proxies in the chain
+  app.set('trust proxy', 2); // Exactly two hops, so X-Forwarded-For can't be spoofed past them
 }
 
 // Make io available to routes
 app.set('io', io);
 
 // Middleware
+// Scripts may only come from our own origin (the Alpine CSP build needs no eval and the page has
+// no inline scripts). Inline styles stay allowed: the UI uses style attributes and style-loader.
+const wsOrigin = appConfig.appUrl.replace(/^http/, 'ws');
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:'],
+      connectSrc: ["'self'", wsOrigin],
+      formAction: ["'self'"],
+      frameAncestors: ["'none'"],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+    },
+  },
+}));
 app.use(cors({
   origin: process.env.NODE_ENV === 'production'
-    ? (process.env.APP_URL || true) // Use APP_URL from env or allow all
+    ? appConfig.appUrl // Same-origin app: only ever allow ourselves
     : ['http://localhost:8080', 'http://localhost:3000'],
   credentials: true,
 }));

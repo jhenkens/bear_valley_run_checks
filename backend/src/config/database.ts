@@ -1,12 +1,65 @@
 import { PrismaClient } from '@prisma/client';
+import { encryptSecret, decryptSecret } from '../utils/tokenCrypto';
 
-let prismaInstance: PrismaClient;
+const TOKEN_FIELDS = ['accessToken', 'refreshToken'] as const;
 
-export function getPrismaClient(): PrismaClient {
+function encryptTokens(data: any) {
+  if (!data) return data;
+  for (const field of TOKEN_FIELDS) {
+    if (typeof data[field] === 'string') data[field] = encryptSecret(data[field]);
+  }
+  return data;
+}
+
+// Google OAuth tokens are encrypted on write and decrypted on read, so the rest of the app
+// (and the Google client) only ever sees plaintext.
+function createClient() {
+  return new PrismaClient({
+    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+  }).$extends({
+    query: {
+      googleOAuth: {
+        create({ args, query }) {
+          encryptTokens(args.data);
+          return query(args);
+        },
+        update({ args, query }) {
+          encryptTokens(args.data);
+          return query(args);
+        },
+        updateMany({ args, query }) {
+          encryptTokens(args.data);
+          return query(args);
+        },
+        upsert({ args, query }) {
+          encryptTokens(args.create);
+          encryptTokens(args.update);
+          return query(args);
+        },
+      },
+    },
+    result: {
+      googleOAuth: {
+        accessToken: {
+          needs: { accessToken: true },
+          compute: (row) => decryptSecret(row.accessToken),
+        },
+        refreshToken: {
+          needs: { refreshToken: true },
+          compute: (row) => decryptSecret(row.refreshToken),
+        },
+      },
+    },
+  });
+}
+
+type ExtendedPrismaClient = ReturnType<typeof createClient>;
+
+let prismaInstance: ExtendedPrismaClient;
+
+export function getPrismaClient(): ExtendedPrismaClient {
   if (!prismaInstance) {
-    prismaInstance = new PrismaClient({
-      log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-    });
+    prismaInstance = createClient();
   }
   return prismaInstance;
 }

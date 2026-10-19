@@ -3,8 +3,13 @@ set -e
 
 echo "=== Starting Bear Valley Run Checks ==="
 
-# Ensure the database directory exists
-mkdir -p /app/data
+# Start as root only to fix ownership of the (possibly root-owned) data volume,
+# then run everything else as the unprivileged "node" user
+if [ "$(id -u)" = "0" ]; then
+  mkdir -p /app/data
+  chown -R node:node /app/data
+  exec su-exec node "$0" "$@"
+fi
 
 # Check if migrations exist
 if [ ! -d "/app/prisma/migrations" ]; then

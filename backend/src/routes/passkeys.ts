@@ -133,7 +133,7 @@ router.get('/register/options', requireAuth, async (req: AuthRequest, res) => {
         // Required (not just preferred) so the credential is discoverable -
         // that's what lets login happen without typing a username.
         residentKey: 'required',
-        userVerification: 'preferred',
+        userVerification: 'required',
       },
     });
 
@@ -171,8 +171,6 @@ router.post('/register/verify', requireAuth, async (req: AuthRequest, res) => {
       expectedChallenge,
       expectedOrigin: origin,
       expectedRPID: rpID,
-      // Options ask for 'preferred'; the library default would reject providers that skip UV
-      requireUserVerification: false,
     });
 
     if (!verification.verified || !verification.registrationInfo) {
@@ -223,7 +221,7 @@ router.get('/authenticate/options', async (req, res) => {
     // site rather than one we've pre-selected, so login needs no username.
     const options = await generateAuthenticationOptions({
       rpID,
-      userVerification: 'preferred',
+      userVerification: 'required',
     });
 
     req.session.currentChallenge = options.challenge;
@@ -267,7 +265,6 @@ router.post('/authenticate/verify', async (req, res) => {
       expectedChallenge,
       expectedOrigin: origin,
       expectedRPID: rpID,
-      requireUserVerification: false,
       credential: {
         id: authenticator.credentialId,
         publicKey: new Uint8Array(authenticator.publicKey),

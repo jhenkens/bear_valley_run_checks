@@ -12,9 +12,9 @@ oidc:
   clientId: ''
   clientSecret: ''
   displayName: Authentik   # Label on the sign-in button
-  # Refuse logins whose email_verified claim isn't true. Leave off if the provider is trusted
-  # to only release verified emails (Authentik with Google as the only source).
-  requireVerifiedEmail: false
+  # Refuse logins whose email_verified claim isn't true. Accounts are matched by email, so only
+  # turn this off (OIDC_REQUIRE_VERIFIED_EMAIL=false) if the provider can only release verified emails.
+  requireVerifiedEmail: true
 
 # Superusers (always have admin access, cannot be demoted or deleted)
 superusers:

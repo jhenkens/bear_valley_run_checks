@@ -12,6 +12,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@alpinejs/csp": "^3.17.4",
     "@simplewebauthn/browser": "^14.0.0",
     "socket.io-client": "^4.8.1"
   },

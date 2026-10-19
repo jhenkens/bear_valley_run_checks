@@ -4,11 +4,15 @@ import { appConfig } from '../config/config';
 
 const SQLiteStore = createSqliteStore(session);
 
+let sessionMiddleware: ReturnType<typeof session> | null = null;
+
+// One shared instance, so Express and Socket.IO read the same session store
 export function createSessionMiddleware() {
+  if (sessionMiddleware) return sessionMiddleware;
   const isProduction = process.env.NODE_ENV === 'production';
   const isHttps = process.env.HTTPS === 'true' || (isProduction && !process.env.HTTPS);
   
-  return session({
+  sessionMiddleware = session({
     name: 'bvsp.runcheck.session',
     store: new SQLiteStore({
       db: 'sessions.db',
@@ -26,4 +30,5 @@ export function createSessionMiddleware() {
       path: '/',
     },
   });
+  return sessionMiddleware;
 }

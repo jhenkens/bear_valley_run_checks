@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Public passkey provider AAGUIDs (UUIDs, not secrets)"
+paths = ['''backend/src/data/aaguids\.json''']
