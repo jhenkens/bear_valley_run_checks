@@ -228,7 +228,8 @@ if (appRoot) {
         </div>
 
         <!-- Admin Tab -->
-        <div class="content" x-show="currentTab === 'admin'">
+        <template x-if="currentTab === 'admin' && user?.isAdmin">
+        <div class="content">
           <!-- Google Drive OAuth Section (Superuser only) -->
           <div class="confirm-list" style="margin-bottom: 2rem;" x-show="user?.isSuperuser">
             <h3>Google Drive Connection</h3>
@@ -278,7 +279,6 @@ if (appRoot) {
               <input type="email" x-model="newUserEmail" placeholder="user@example.com">
             </div>
             <button class="btn" @click="createUser">Create User</button>
-          </div>
           </div>
 
           <div class="confirm-list">
@@ -368,6 +368,7 @@ if (appRoot) {
 
           <div x-show="error" class="message error" x-text="error" style="margin-top: 1rem;"></div>
         </div>
+        </template>
 
         <!-- Cart Banner -->
         <div class="cart-banner" x-show="cart.length > 0 && !showConfirm">
