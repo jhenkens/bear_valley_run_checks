@@ -42,7 +42,7 @@ if (appRoot) {
         <div x-show="oidcProvider" style="margin-top: 1.5rem; text-align: center;">
           <div style="color: #666; font-size: 0.9em; margin-bottom: 0.75rem;">or</div>
           <button class="btn" @click="loginWithOidc" style="background: #6c757d;">
-            <span x-text="'Sign in with ' + oidcProvider.name"></span>
+            <span x-text="'Sign in with ' + (oidcProvider?.name || '')"></span>
           </button>
         </div>
 
@@ -268,7 +268,7 @@ if (appRoot) {
           </div>
 
           <div class="confirm-list">
-            <h3 x-text="editingUserId ? 'Edit User' : 'Add User'"></h3>
+            <h3>Add User</h3>
             <div class="form-group">
               <label>Name</label>
               <input type="text" x-model="newUserName" placeholder="John Doe">
@@ -277,11 +277,8 @@ if (appRoot) {
               <label>Email <span style="font-weight: normal; color: #999;">(optional)</span></label>
               <input type="email" x-model="newUserEmail" placeholder="user@example.com">
             </div>
-            <div style="display: flex; gap: 0.5rem;">
-              <button class="btn" x-show="!editingUserId" @click="createUser">Create User</button>
-              <button class="btn" x-show="editingUserId" @click="saveUser">Save User</button>
-              <button class="btn" x-show="editingUserId" @click="cancelEdit" style="background: #6c757d;">Cancel</button>
-            </div>
+            <button class="btn" @click="createUser">Create User</button>
+          </div>
           </div>
 
           <div class="confirm-list">
@@ -320,13 +317,27 @@ if (appRoot) {
                 <template x-for="u in sortedUsers" :key="u.id">
                   <tr>
                     <td>
-                      <span x-text="u.name" :class="{ 'dup-warning': isDuplicateName(u) }"></span>
-                      <span x-show="u.isSuperuser" class="user-badge">SUPERUSER</span>
-                      <span x-show="isDuplicateName(u)" class="dup-warning">⚠ Duplicate name</span>
+                      <template x-if="editingUserId === u.id">
+                        <input type="text" x-model="editName" placeholder="Name" @keyup.enter="saveUser" @keyup.escape="cancelEdit">
+                      </template>
+                      <template x-if="editingUserId !== u.id">
+                        <span>
+                          <span x-text="u.name" :class="{ 'dup-warning': isDuplicateName(u) }"></span>
+                          <span x-show="u.isSuperuser" class="user-badge">SUPERUSER</span>
+                          <span x-show="isDuplicateName(u)" class="dup-warning">⚠ Duplicate name</span>
+                        </span>
+                      </template>
                     </td>
-                    <td class="user-email" :class="{ 'dup-warning': isDuplicateEmail(u) }">
-                      <span x-text="u.email || '(no email)'"></span>
-                      <span x-show="isDuplicateEmail(u)">⚠ Duplicate email</span>
+                    <td class="user-email" :class="{ 'dup-warning': editingUserId !== u.id && isDuplicateEmail(u) }">
+                      <template x-if="editingUserId === u.id">
+                        <input type="email" x-model="editEmail" placeholder="Email (optional)" @keyup.enter="saveUser" @keyup.escape="cancelEdit">
+                      </template>
+                      <template x-if="editingUserId !== u.id">
+                        <span>
+                          <span x-text="u.email || '(no email)'"></span>
+                          <span x-show="isDuplicateEmail(u)">⚠ Duplicate email</span>
+                        </span>
+                      </template>
                     </td>
                     <td x-text="formatUserDate(u.createdAt)"></td>
                     <td>
@@ -336,163 +347,23 @@ if (appRoot) {
                       <input type="checkbox" x-model="welcomeSelected[u.id]" :disabled="!u.email">
                     </td>
                     <td class="user-actions">
-                      <button class="btn" @click="editUser(u)" :disabled="u.isSuperuser" style="font-size: 0.85rem; padding: 0.25rem 0.5rem;">Edit</button>
-                      <button class="btn-danger" @click="deleteUser(u)" :disabled="u.isSuperuser">Delete</button>
+                      <template x-if="editingUserId === u.id">
+                        <span>
+                          <button class="btn" @click="saveUser" style="font-size: 0.85rem; padding: 0.25rem 0.5rem;">Save</button>
+                          <button class="btn" @click="cancelEdit" style="font-size: 0.85rem; padding: 0.25rem 0.5rem; background: #6c757d;">Cancel</button>
+                        </span>
+                      </template>
+                      <template x-if="editingUserId !== u.id">
+                        <span>
+                          <button class="btn" @click="editUser(u)" :disabled="u.isSuperuser" style="font-size: 0.85rem; padding: 0.25rem 0.5rem;">Edit</button>
+                          <button class="btn-danger" @click="deleteUser(u)" :disabled="u.isSuperuser">Delete</button>
+                        </span>
+                      </template>
                     </td>
                   </tr>
                 </template>
               </tbody>
             </table>
-          </div>
-
-          <div x-show="error" class="message error" x-text="error" style="margin-top: 1rem;"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- History Tab -->
-        <div class="content" x-show="currentTab === 'history'">
-          <template x-for="[section, runs] in historyBySection" :key="section">
-            <div class="section-runs">
-              <div class="section-header" @click="toggleSection('history-' + section)" style="cursor: pointer; user-select: none;">
-                <h3>
-                  <span x-text="isSectionExpanded('history-' + section) ? '▼' : '▶'" style="display: inline-block; width: 1.2em;"></span>
-                  <span x-text="section"></span>
-                  <span style="font-size: 0.85em; font-weight: normal; margin-left: 0.5rem; color: #666;" x-text="'(' + runs.length + ')'"></span>
-                </h3>
-              </div>
-              <div x-show="isSectionExpanded('history-' + section)">
-                <template x-for="run in runs" :key="run.runName">
-                  <div>
-                    <div class="run-item">
-                      <div class="run-info">
-                        <div class="run-name" x-text="run.runName"></div>
-                        <div x-show="run.checks.length === 0" class="run-time" style="color: #999; font-style: italic;">No checks</div>
-                        <template x-for="check in run.checks" :key="check.id">
-                        <div class="run-time" x-text="new Date(check.checkTime).toLocaleTimeString() + ' - ' + check.patroller"></div>
-                        </template>
-                    </div>
-                  </div>
-                </template>
-              </div>
-            </div>
-          </template>
-        </div>
-
-        <!-- Patrollers Tab -->
-        <div class="content" x-show="currentTab === 'patrollers'">
-          <template x-for="[patroller, patrollerChecks] in checksByPatroller" :key="patroller">
-            <div class="history-section">
-              <div class="section-header" @click="toggleSection('patroller-' + patroller)" style="cursor: pointer; user-select: none;">
-                <h3>
-                  <span x-text="isSectionExpanded('patroller-' + patroller) ? '▼' : '▶'" style="display: inline-block; width: 1.2em;"></span>
-                  <span x-text="patroller"></span>
-                  <span style="font-size: 0.85em; font-weight: normal; margin-left: 0.5rem; color: #666;" x-text="'(' + patrollerChecks.length + ')'"></span>
-                </h3>
-              </div>
-              <div x-show="isSectionExpanded('patroller-' + patroller)">
-                <template x-for="check in patrollerChecks" :key="check.id">
-                  <div class="history-item">
-                    <div class="history-run" x-text="check.runName + ' (' + check.section + ')'"></div>
-                    <div class="history-details" x-text="new Date(check.checkTime).toLocaleTimeString()"></div>
-                  </div>
-                </template>
-              </div>
-            </div>
-          </template>
-          <div x-show="checks.length === 0" class="message">No checks today</div>
-        </div>
-
-        <!-- Admin Tab -->
-        <div class="content" x-show="currentTab === 'admin'">
-          <!-- Google Drive OAuth Section (Superuser only) -->
-          <div class="confirm-list" style="margin-bottom: 2rem;" x-show="user?.isSuperuser">
-            <h3>Google Drive Connection</h3>
-            
-            <template x-if="!googleOAuthStatus?.configured">
-              <div>
-                <p>Link your Google Drive account to store daily run check spreadsheets.</p>
-                <button class="btn" @click="linkGoogleDrive">Link Google Drive</button>
-              </div>
-            </template>
-
-            <template x-if="googleOAuthStatus?.configured">
-              <div>
-                <div class="oauth-status">
-                  <div class="oauth-info">
-                    <div><strong>Status:</strong>
-                      <span x-show="googleOAuthStatus.isActive" style="color: green;">✅ Connected</span>
-                      <span x-show="!googleOAuthStatus.isActive" style="color: orange;">⚠️ Disconnected</span>
-                    </div>
-                    <div><strong>Linked by:</strong> <span x-text="googleOAuthStatus.linkedUser?.email"></span></div>
-                    <div><strong>Google Account:</strong> <span x-text="googleOAuthStatus.googleEmail"></span></div>
-                    <div x-show="googleOAuthStatus.folderId"><strong>Folder:</strong> <span x-text="googleOAuthStatus.folderId"></span></div>
-                  </div>
-
-                  <div x-show="!googleOAuthStatus.isActive" class="oauth-warning" style="margin-top: 0.5rem;">
-                    ⚠️ Connection is inactive. The backend will attempt to reconnect automatically. You can manually refresh below.
-                  </div>
-                </div>
-
-                <div class="oauth-actions" style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                  <button class="btn" @click="refreshGoogleToken">Refresh Connection & Reload Runs</button>
-                  <button class="btn-danger" @click="disconnectGoogle">Disconnect</button>
-                  <button class="btn" style="background: #9e9e9e;" @click="testMarkInactive" x-show="user?.isSuperuser">🧪 Test: Force Inactive</button>
-                </div>
-              </div>
-            </template>
-          </div>
-
-          <div class="confirm-list">
-            <h3 x-text="editingUserId ? 'Edit User' : 'Add User'"></h3>
-            <div class="form-group">
-              <label>Name</label>
-              <input type="text" x-model="newUserName" placeholder="John Doe">
-            </div>
-            <div class="form-group">
-              <label>Email <span style="font-weight: normal; color: #999;">(optional)</span></label>
-              <input type="email" x-model="newUserEmail" placeholder="user@example.com">
-            </div>
-            <div style="display: flex; gap: 0.5rem;">
-              <button class="btn" x-show="!editingUserId" @click="createUser">Create User</button>
-              <button class="btn" x-show="editingUserId" @click="saveUser">Save User</button>
-              <button class="btn" x-show="editingUserId" @click="cancelEdit" style="background: #6c757d;">Cancel</button>
-            </div>
-          </div>
-
-          <div class="confirm-list">
-            <h3>Bulk Add Users</h3>
-            <div class="form-group">
-              <label>Paste CSV, one user per line: <code>Name, email</code> (email optional)</label>
-              <textarea x-model="bulkText" rows="6" placeholder="Jane Doe, jane@example.com&#10;John Smith, john@example.com"></textarea>
-            </div>
-            <button class="btn" @click="bulkCreateUsers" :disabled="!bulkText.trim()">Upload Users</button>
-          </div>
-
-          <div class="user-table">
-            <template x-for="u in sortedUsers" :key="u.id">
-              <div class="user-row">
-                <div class="user-info">
-                  <div class="user-name">
-                    <span x-text="u.name" :class="{ 'dup-warning': isDuplicateName(u) }"></span>
-                    <span x-show="u.isSuperuser" class="user-badge">SUPERUSER</span>
-                    <span x-show="isDuplicateName(u)" class="dup-warning">⚠ Duplicate name</span>
-                  </div>
-                  <div class="user-email" :class="{ 'dup-warning': isDuplicateEmail(u) }">
-                    <span x-text="u.email || '(no email)'"></span>
-                    <span x-show="isDuplicateEmail(u)">⚠ Duplicate email</span>
-                  </div>
-                </div>
-                <div class="user-actions">
-                  <label>
-                    <input type="checkbox" :checked="u.isAdmin" @change="toggleAdmin(u)" :disabled="u.isSuperuser">
-                    Admin
-                  </label>
-                  <button class="btn" @click="editUser(u)" :disabled="u.isSuperuser" style="font-size: 0.85rem; padding: 0.25rem 0.5rem;">Edit</button>
-                  <button class="btn-danger" @click="deleteUser(u)" :disabled="u.isSuperuser">Delete</button>
-                </div>
-              </div>
-            </template>
           </div>
 
           <div x-show="error" class="message error" x-text="error" style="margin-top: 1rem;"></div>

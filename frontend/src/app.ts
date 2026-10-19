@@ -30,6 +30,8 @@ export function createApp() {
     newUserEmail: '',
     newUserName: '',
     editingUserId: null as string | null,
+    editName: '',
+    editEmail: '',
     bulkText: '',
     userSort: { key: 'name', dir: 'asc' } as { key: 'name' | 'email' | 'createdAt'; dir: 'asc' | 'desc' },
     welcomeSelected: {} as Record<string, boolean>,
@@ -589,33 +591,31 @@ export function createApp() {
 
     editUser(user: any) {
       this.editingUserId = user.id;
-      this.newUserName = user.name;
-      this.newUserEmail = user.email || '';
+      this.editName = user.name;
+      this.editEmail = user.email || '';
     },
 
     cancelEdit() {
       this.editingUserId = null;
-      this.newUserName = '';
-      this.newUserEmail = '';
+      this.editName = '';
+      this.editEmail = '';
     },
 
     async saveUser() {
       try {
         this.error = null;
 
-        if (!this.newUserName) {
+        if (!this.editName.trim()) {
           this.error = 'Name is required';
           return;
         }
 
         await api.updateUser(this.editingUserId!, {
-          name: this.newUserName,
-          email: this.newUserEmail || null,
+          name: this.editName,
+          email: this.editEmail.trim() || null,
         });
         this.showMessage('success', 'User updated');
-        this.editingUserId = null;
-        this.newUserEmail = '';
-        this.newUserName = '';
+        this.cancelEdit();
         await this.loadData();
       } catch (err: any) {
         this.error = err.message || 'Failed to update user';
