@@ -45,7 +45,7 @@
     "@types/morgan": "^1.9.10",
     "@types/node": "^20.17.10",
     "@types/nodemailer": "^6.4.16",
-    "prisma": "^5.22.0",
+    "prisma": "^7.10.1",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.7.2"
