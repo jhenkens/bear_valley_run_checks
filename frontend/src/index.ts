@@ -28,7 +28,7 @@ if (appRoot) {
 
         <div class="form-group">
           <label>Email</label>
-          <input type="email" x-model="loginEmail" @keyup.enter="isDev ? devLogin() : login()" placeholder="your@email.com" autocomplete="username">
+          <input type="email" x-model="loginEmail" @keyup.enter="isDev ? devLogin() : login()" placeholder="your@email.com" autocomplete="username webauthn">
         </div>
 
         <button x-show="isDev" class="btn" @click="devLogin" :disabled="!loginEmail || isLoggingIn" style="background: #28a745;">
@@ -37,6 +37,12 @@ if (appRoot) {
 
         <button x-show="!isDev" class="btn" @click="login" :disabled="!loginEmail || isLoggingIn">
           <span x-text="isLoggingIn ? 'Sending...' : 'Send Login Link'"></span>
+        </button>
+
+        <!-- Passkey autofill (conditional UI) fires automatically from the email field above.
+             This is a manual fallback for browsers/platforms that don't support that. -->
+        <button x-show="passkeySupported" class="btn" @click="loginWithPasskey" :disabled="isLoggingIn" style="background: #6c757d; margin-top: 0.5rem;">
+          Use a passkey
         </button>
 
         <div x-show="oidcProvider" style="margin-top: 1.5rem; text-align: center;">
@@ -59,6 +65,9 @@ if (appRoot) {
             <div x-show="lastUpdated" style="font-size: 0.75em; color: #e0e0e0; margin-top: 0.25rem;">
               Last updated: <span x-text="lastUpdated ? lastUpdated.toLocaleTimeString() : ''"></span>
             </div>
+            <div class="header-user" x-show="user">
+              Signed in as <strong x-text="user?.name"></strong><span x-show="user?.email" x-text="' (' + user?.email + ')'"></span>
+            </div>
           </div>
           <button @click="logout">Logout</button>
         </div>
@@ -68,6 +77,27 @@ if (appRoot) {
           <div :class="'notification notification-' + notification.type" x-text="notification.message"></div>
         </template>
 
+        <!-- Passkey prompt (after magic link login on mobile) -->
+        <div class="confirm-list" x-show="showPasskeyPrompt" style="margin: 1rem;">
+          <h3>Log in faster next time?</h3>
+          <p style="font-size: 0.9em; color: #666;">Save a passkey on this device and sign in with your fingerprint, face, or PIN instead of an email link.</p>
+          <div x-show="!promptPasskeyCreated">
+            <button class="btn" @click="savePasskeyFromPrompt" :disabled="isSavingPasskeyPrompt">
+              <span x-text="isSavingPasskeyPrompt ? 'Saving...' : 'Create passkey'"></span>
+            </button>
+            <button class="btn" style="background: #6c757d; margin-top: 0.5rem;" @click="showPasskeyPrompt = false">Not now</button>
+          </div>
+          <div x-show="promptPasskeyCreated && pendingRename">
+            <div class="message success">Passkey saved</div>
+            <div class="form-group">
+              <label>Passkey name</label>
+              <input type="text" x-model="renameValue" @keyup.enter="saveRenamePasskey" style="width: 100%; box-sizing: border-box;">
+            </div>
+            <button class="btn" @click="saveRenamePasskey">Save name</button>
+            <button class="btn" style="background: #6c757d; margin-top: 0.5rem;" @click="finishRename">Keep this name</button>
+          </div>
+        </div>
+
         <!-- Message -->
         <div x-show="message" :class="'message ' + (message?.type || '')" x-text="message?.text" style="margin: 1rem;"></div>
 
@@ -76,6 +106,7 @@ if (appRoot) {
           <button class="tab" :class="currentTab === 'runs' && 'active'" @click="switchTab('runs')">Runs</button>
           <button class="tab" :class="currentTab === 'history' && 'active'" @click="switchTab('history')">History</button>
           <button class="tab" :class="currentTab === 'patrollers' && 'active'" @click="switchTab('patrollers')">Patrollers</button>
+          <button class="tab" :class="currentTab === 'account' && 'active'" @click="switchTab('account')">Account</button>
           <button class="tab" :class="currentTab === 'admin' && 'active'" @click="switchTab('admin')" x-show="user?.isAdmin">Admin</button>
         </div>
 
@@ -122,7 +153,7 @@ if (appRoot) {
                   <div class="run-item" :class="isInCart(run) && 'selected'" @click="toggleRunInCart(run)">
                     <div class="run-info">
                       <div class="run-name" x-text="run.name"></div>
-                      <div class="run-time" x-text="formatTimeSince(run.minutesSinceCheck)"></div>
+                      <div class="run-time" x-text="formatTimeSince(run.minutesSinceCheck) + (run.lastCheck ? ' · ' + run.lastCheck.patroller : '')"></div>
                     </div>
                     <div class="run-indicator" :class="run.color"></div>
                   </div>
@@ -230,12 +261,48 @@ if (appRoot) {
           <div x-show="checks.length === 0" class="message">No checks today</div>
         </div>
 
+        <!-- Account Tab -->
+        <div class="content" x-show="currentTab === 'account'">
+          <div class="confirm-list" style="margin-bottom: 2rem;" x-show="user && user.oidcOnly">
+            <p>Linked to Bear Valley Ski Patrol Auth</p>
+          </div>
+          <div class="confirm-list" style="margin-bottom: 2rem;" x-show="user && !user.oidcOnly">
+            <h3>Passkeys</h3>
+            <p style="font-size: 0.9em; color: #666;">Sign in with your device's fingerprint, face, or PIN instead of an email link.</p>
+
+            <template x-for="passkey in passkeys" :key="passkey.id">
+              <div class="history-item" style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <div class="history-run" x-text="passkey.name"></div>
+                  <div class="history-details" x-text="'Added ' + new Date(passkey.createdAt).toLocaleDateString() + (passkey.lastUsedAt ? ' · last used ' + new Date(passkey.lastUsedAt).toLocaleDateString() : '')"></div>
+                </div>
+                <button class="btn" style="background: #dc3545; width: auto; padding: 0.4rem 0.8rem;" @click="removePasskey(passkey.id)">Remove</button>
+              </div>
+            </template>
+            <div x-show="passkeys.length === 0" class="message">No passkeys yet</div>
+
+            <div class="form-group" x-show="pendingRename && !showPasskeyPrompt" style="margin: 1rem 0; padding: 1rem; background: #f0f7ff; border-radius: 4px;">
+              <label>Name this passkey</label>
+              <input type="text" x-model="renameValue" @keyup.enter="saveRenamePasskey" style="width: 100%; box-sizing: border-box; margin-bottom: 0.5rem;">
+              <button class="btn" @click="saveRenamePasskey">Save name</button>
+              <button class="btn" style="background: #6c757d; margin-top: 0.5rem;" @click="finishRename">Keep this name</button>
+            </div>
+
+
+            <button class="btn" style="margin-top: 1rem;" @click="addPasskey" :disabled="isAddingPasskey">
+              <span x-text="isAddingPasskey ? 'Adding...' : 'Add a passkey'"></span>
+            </button>
+            <div x-show="passkeyMessage" class="message success" x-text="passkeyMessage" style="margin-top: 1rem;"></div>
+            <div x-show="!passkeySupported" class="message" style="margin-top: 1rem;">Your browser doesn't support passkeys.</div>
+          </div>
+        </div>
+
         <!-- Admin Tab -->
         <template x-if="currentTab === 'admin' && user?.isAdmin">
         <div class="content">
           <!-- Google Drive OAuth Section (Superuser only) -->
-          <div class="confirm-list" style="margin-bottom: 2rem;" x-show="user?.isSuperuser">
-            <h3>Google Drive Connection</h3>
+          <details class="confirm-list collapsible" style="margin-bottom: 2rem;" x-show="user?.isSuperuser">
+            <summary><h3>Google Drive Connection</h3></summary>
             
             <template x-if="!googleOAuthStatus?.configured">
               <div>
@@ -269,10 +336,10 @@ if (appRoot) {
                 </div>
               </div>
             </template>
-          </div>
+          </details>
 
-          <div class="confirm-list">
-            <h3>Add User</h3>
+          <details class="confirm-list collapsible">
+            <summary><h3>Add User</h3></summary>
             <div class="form-group">
               <label>Name</label>
               <input type="text" x-model="newUserName" placeholder="John Doe">
@@ -282,16 +349,16 @@ if (appRoot) {
               <input type="email" x-model="newUserEmail" placeholder="user@example.com">
             </div>
             <button class="btn" @click="createUser">Create User</button>
-          </div>
+          </details>
 
-          <div class="confirm-list">
-            <h3>Bulk Add Users</h3>
+          <details class="confirm-list collapsible">
+            <summary><h3>Bulk Add Users</h3></summary>
             <div class="form-group">
               <label>Paste CSV, one user per line: <code>Name, email</code> (email optional)</label>
               <textarea x-model="bulkText" rows="6" placeholder="Jane Doe, jane@example.com&#10;John Smith, john@example.com"></textarea>
             </div>
             <button class="btn" @click="bulkCreateUsers" :disabled="!bulkText.trim()">Upload Users</button>
-          </div>
+          </details>
 
           <div class="confirm-list">
             <div class="users-header">

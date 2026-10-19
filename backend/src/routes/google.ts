@@ -7,7 +7,7 @@ import { refreshRunProvider } from '../providers';
 // Extend Express Request type
 declare module 'express-serve-static-core' {
   interface Request {
-    user?: { id: string; email: string | null; name: string; isAdmin: boolean; isSuperuser: boolean };
+    user?: { id: string; email: string | null; name: string; isAdmin: boolean; isSuperuser: boolean; oidcOnly: boolean };
   }
 }
 import { appConfig } from '../config/config';

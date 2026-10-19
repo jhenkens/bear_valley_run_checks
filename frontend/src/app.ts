@@ -1,6 +1,13 @@
 import { api, ApiError } from './services/api';
+import { detectDeviceName, isMobileDevice } from './utils/deviceName';
 import { connectSocket } from './services/socket';
 import { calculateRunColors, groupRunsBySection, formatTimeSince, RunWithColor } from './utils/colorLogic';
+import {
+  startAuthentication,
+  startRegistration,
+  browserSupportsWebAuthnAutofill,
+  browserSupportsWebAuthn,
+} from '@simplewebauthn/browser';
 
 export function createApp() {
   return {
@@ -9,8 +16,17 @@ export function createApp() {
     loading: true,
     error: null as string | null,
     user: null as any,
-    currentTab: 'runs' as 'runs' | 'history' | 'patrollers' | 'admin',
+    currentTab: 'runs' as 'runs' | 'history' | 'patrollers' | 'admin' | 'account',
     oidcProvider: null as { name: string } | null,
+    passkeys: [] as any[],
+    passkeySupported: false,
+    isAddingPasskey: false,
+    pendingRename: null as { id: string; token: string } | null,
+    renameValue: '',
+    promptPasskeyCreated: false,
+    showPasskeyPrompt: false,
+    isSavingPasskeyPrompt: false,
+    passkeyMessage: null as string | null,
     runs: [] as any[],
     checks: [] as any[],
     patrollers: [] as string[],
@@ -260,13 +276,18 @@ export function createApp() {
           }
         }
         this.showLoginErrorFromUrl();
+        this.passkeySupported = browserSupportsWebAuthn();
         await this.checkAuth();
         if (this.user) {
+          this.maybePromptForPasskey();
           await this.loadData();
           connectSocket(this.handleNewCheck.bind(this), this.handleSocketReconnect.bind(this));
           this.setupVisibilityListener();
         } else {
           await this.loadLoginProviders();
+          // Fire-and-forget: registers the browser's passkey autofill listener on the login form's
+          // email input. Resolves only once the user picks a passkey, so it must not be awaited.
+          this.tryPasskeyAutofillLogin();
         }
       } catch (err: any) {
         console.error('Init error:', err);
@@ -365,6 +386,101 @@ export function createApp() {
       }
     },
 
+    // After a magic link login on a phone, offer a one-tap passkey - at most once every 30 days.
+    // The server marks magic link logins with ?login=magic on the redirect to /.
+    maybePromptForPasskey() {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('login') !== 'magic') return;
+      params.delete('login');
+      const qs = params.toString();
+      window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''));
+
+      if (!this.passkeySupported || !isMobileDevice() || this.user?.oidcOnly) return;
+      const PROMPT_INTERVAL_MS = 30 * 24 * 60 * 60 * 1000;
+      try {
+        const last = Number(localStorage.getItem('passkeyPromptShownAt') || 0);
+        if (Date.now() - last < PROMPT_INTERVAL_MS) return;
+        localStorage.setItem('passkeyPromptShownAt', String(Date.now()));
+      } catch (e) {
+        return; // Storage unavailable: don't risk nagging on every login
+      }
+      this.promptPasskeyCreated = false;
+      this.showPasskeyPrompt = true;
+    },
+
+    async savePasskeyFromPrompt() {
+      if (this.isSavingPasskeyPrompt) return;
+      try {
+        this.isSavingPasskeyPrompt = true;
+        this.error = null;
+        await this.registerPasskey();
+        this.promptPasskeyCreated = true;
+      } catch (err: any) {
+        if (err?.name !== 'NotAllowedError') {
+          this.error = err.message || 'Failed to add passkey';
+        }
+      } finally {
+        this.isSavingPasskeyPrompt = false;
+      }
+    },
+
+    // Runs the browser registration ceremony. The server names the passkey after its provider
+    // (e.g. 1Password) when it can tell, else uses our device label; then the user can rename it.
+    async registerPasskey() {
+      const optionsJSON = await api.getPasskeyRegistrationOptions();
+      const response = await startRegistration({ optionsJSON });
+      const { id, name, renameToken } = await api.verifyPasskeyRegistration(response, detectDeviceName());
+      this.rememberDevicePasskey(id);
+      this.pendingRename = { id, token: renameToken };
+      this.renameValue = name;
+      await this.loadPasskeys();
+    },
+
+    // Rename is only offered right after creation, using the one-time token from the server
+    async saveRenamePasskey() {
+      const pending = this.pendingRename;
+      const name = this.renameValue.trim();
+      if (!pending || !name) return;
+      try {
+        await api.renamePasskey(pending.id, name, pending.token);
+        await this.loadPasskeys();
+        this.finishRename();
+      } catch (err: any) {
+        this.error = err.message || 'Failed to rename passkey';
+      }
+    },
+
+    finishRename() {
+      this.pendingRename = null;
+      this.showPasskeyPrompt = false;
+    },
+
+    // Remember which passkeys were created on this device, so removing the last one re-arms
+    // the 30-day login prompt (the server can't tell us which device a passkey lives on).
+    rememberDevicePasskey(id: string) {
+      try {
+        const ids = JSON.parse(localStorage.getItem('devicePasskeyIds') || '[]');
+        localStorage.setItem('devicePasskeyIds', JSON.stringify([...ids, id]));
+        localStorage.setItem('passkeyPromptShownAt', String(Date.now()));
+      } catch (e) {
+        // Not critical
+      }
+    },
+
+    forgetDevicePasskey(id: string) {
+      try {
+        const ids: string[] = JSON.parse(localStorage.getItem('devicePasskeyIds') || '[]');
+        if (!ids.includes(id)) return;
+        const remaining = ids.filter((x) => x !== id);
+        localStorage.setItem('devicePasskeyIds', JSON.stringify(remaining));
+        if (remaining.length === 0) {
+          localStorage.removeItem('passkeyPromptShownAt');
+        }
+      } catch (e) {
+        // Not critical
+      }
+    },
+
     // The OIDC callback redirects back here with ?login_error=... on failure.
     showLoginErrorFromUrl() {
       const params = new URLSearchParams(window.location.search);
@@ -388,6 +504,95 @@ export function createApp() {
       window.location.href = '/auth/oidc/login';
     },
 
+    // Passkeys - login
+    async tryPasskeyAutofillLogin() {
+      try {
+        if (!(await browserSupportsWebAuthnAutofill())) {
+          return;
+        }
+
+        const optionsJSON = await api.getPasskeyAuthenticationOptions();
+        const response = await startAuthentication({ optionsJSON, useBrowserAutofill: true });
+        await api.verifyPasskeyAuthentication(response);
+
+        // The verify response only has id/name/email; /me also has isAdmin/isSuperuser
+        this.user = (await api.getMe()).user;
+        await this.loadData();
+        connectSocket(this.handleNewCheck.bind(this), this.handleSocketReconnect.bind(this));
+        this.setupVisibilityListener();
+      } catch (err: any) {
+        // The user dismissing the prompt (or no passkey being available) is
+        // routine, not an error worth surfacing.
+        if (err?.name !== 'NotAllowedError') {
+          console.error('Passkey autofill login error:', err);
+        }
+      }
+    },
+
+    async loginWithPasskey() {
+      if (this.isLoggingIn) return;
+
+      try {
+        this.isLoggingIn = true;
+        this.error = null;
+        const optionsJSON = await api.getPasskeyAuthenticationOptions();
+        const response = await startAuthentication({ optionsJSON });
+        await api.verifyPasskeyAuthentication(response);
+
+        // The verify response only has id/name/email; /me also has isAdmin/isSuperuser
+        this.user = (await api.getMe()).user;
+        await this.loadData();
+        connectSocket(this.handleNewCheck.bind(this), this.handleSocketReconnect.bind(this));
+        this.setupVisibilityListener();
+      } catch (err: any) {
+        if (err?.name !== 'NotAllowedError') {
+          this.error = err.message || 'Passkey login failed';
+        }
+      } finally {
+        this.isLoggingIn = false;
+      }
+    },
+
+    // Passkeys - management (once logged in)
+    async loadPasskeys() {
+      try {
+        const { passkeys } = await api.getPasskeys();
+        this.passkeys = passkeys;
+      } catch (err: any) {
+        this.error = err.message || 'Failed to load passkeys';
+      }
+    },
+
+    async addPasskey() {
+      if (this.isAddingPasskey) return;
+
+      try {
+        this.isAddingPasskey = true;
+        this.error = null;
+        this.passkeyMessage = null;
+
+        await this.registerPasskey();
+        this.passkeyMessage = 'Passkey added';
+      } catch (err: any) {
+        if (err?.name !== 'NotAllowedError') {
+          this.error = err.message || 'Failed to add passkey';
+        }
+      } finally {
+        this.isAddingPasskey = false;
+      }
+    },
+
+    async removePasskey(id: string) {
+      try {
+        await api.deletePasskey(id);
+        this.forgetDevicePasskey(id);
+        if (this.pendingRename?.id === id) this.finishRename();
+        this.passkeys = this.passkeys.filter((p: any) => p.id !== id);
+      } catch (err: any) {
+        this.error = err.message || 'Failed to remove passkey';
+      }
+    },
+
     // Tabs
     switchTab(tab: typeof this.currentTab) {
       this.currentTab = tab;
@@ -396,6 +601,9 @@ export function createApp() {
       if (tab !== 'runs') {
         this.runSearchQuery = '';
         this.handleRunSearch();
+      }
+      if (tab === 'account' && !this.user?.oidcOnly && this.passkeys.length === 0) {
+        this.loadPasskeys();
       }
     },
 

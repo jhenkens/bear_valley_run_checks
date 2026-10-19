@@ -6,6 +6,8 @@ declare module 'express-session' {
   interface SessionData {
     userId: string;
     oidc?: { state: string; codeVerifier: string };
+    currentChallenge?: string;
+    passkeyRename?: { id: string; token: string; expiresAt: number };
   }
 }
 
@@ -16,6 +18,7 @@ export interface AuthRequest extends Request {
     name: string;
     isAdmin: boolean;
     isSuperuser: boolean;
+    oidcOnly: boolean;
   };
 }
 
@@ -47,6 +50,7 @@ export async function requireAuth(
     name: user.name,
     isAdmin: user.isAdmin || userIsSuperuser,
     isSuperuser: userIsSuperuser,
+    oidcOnly: user.oidcOnly,
   };
 
   next();

@@ -75,6 +75,10 @@ router.post('/login', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
+    if (user.oidcOnly) {
+      return res.status(403).json({ error: 'This account signs in with single sign-on. Use the single sign-on button instead.' });
+    }
+
     // Generate magic link
     const token = await generateMagicLink(email.toLowerCase());
     
@@ -125,6 +129,10 @@ router.get('/verify', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
+    if (user.oidcOnly) {
+      return res.status(403).json({ error: 'This account signs in with single sign-on' });
+    }
+
     // Regenerate session for security
     req.session.regenerate((err) => {
       if (err) {
@@ -144,8 +152,9 @@ router.get('/verify', async (req, res) => {
         }
         
         logger.info(`Session saved for user ${user.email}, redirecting to /`);
-        // Redirect to main app after session is saved
-        res.redirect('/');
+        // Redirect to main app after session is saved; the flag lets the frontend
+        // offer to save a passkey after a magic link login
+        res.redirect('/?login=magic');
       });
     });
   } catch (error) {
@@ -226,6 +235,16 @@ router.get('/oidc/callback', async (req, res) => {
     if (!user) {
       logger.warn(`OIDC login for unknown user ${email}`);
       return loginError(res, `No run checks account for ${email}. Ask an administrator to add you.`);
+    }
+
+    // First OIDC login migrates the account to OIDC only: no magic links, no passkeys
+    if (!user.oidcOnly) {
+      await prisma.$transaction([
+        prisma.user.update({ where: { id: user.id }, data: { oidcOnly: true } }),
+        prisma.authenticator.deleteMany({ where: { userId: user.id } }),
+        prisma.magicLink.deleteMany({ where: { OR: [{ userId: user.id }, { email }] } }),
+      ]);
+      logger.info(`User ${user.email} migrated to OIDC-only`);
     }
 
     // Regenerate session for security (also drops the pending OIDC state)

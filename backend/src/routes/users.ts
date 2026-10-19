@@ -167,7 +167,7 @@ router.post('/users/send-welcome', requireAdmin, async (req, res) => {
     let skipped = 0;
 
     for (const user of users) {
-      if (!user.email) {
+      if (!user.email || user.oidcOnly) {
         skipped++;
         continue;
       }
