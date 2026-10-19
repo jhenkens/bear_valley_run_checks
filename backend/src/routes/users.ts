@@ -115,6 +115,70 @@ router.post('/users', requireAdmin, async (req, res) => {
   }
 });
 
+// POST /api/users/bulk - Create many users from [{ name, email }]
+router.post('/users/bulk', requireAdmin, async (req, res) => {
+  try {
+    const { users: rows, sendEmails } = req.body;
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ error: 'No users provided' });
+    }
+    if (rows.length > 500) {
+      return res.status(400).json({ error: 'Too many users (max 500 per upload)' });
+    }
+
+    const prisma = getPrismaClient();
+    const seenEmails = new Set<string>();
+    const created: { name: string; email: string | null }[] = [];
+    const skipped: { name: string; email: string | null; reason: string }[] = [];
+    let emailsSent = 0;
+    let emailsFailed = 0;
+
+    for (const row of rows) {
+      const name = typeof row?.name === 'string' ? row.name.trim() : '';
+      const email = typeof row?.email === 'string' && row.email.trim() ? row.email.toLowerCase().trim() : null;
+
+      if (!name) {
+        skipped.push({ name, email, reason: 'Name is required' });
+        continue;
+      }
+      if (email && !validateEmail(email)) {
+        skipped.push({ name, email, reason: 'Invalid email format' });
+        continue;
+      }
+      if (email) {
+        if (seenEmails.has(email)) {
+          skipped.push({ name, email, reason: 'Duplicate email in upload' });
+          continue;
+        }
+        seenEmails.add(email);
+        if (await prisma.user.findUnique({ where: { email } })) {
+          skipped.push({ name, email, reason: 'A user with that email already exists' });
+          continue;
+        }
+      }
+
+      await prisma.user.create({ data: { email, name, isAdmin: false } });
+      created.push({ name, email });
+
+      if (email && sendEmails && !appConfig.disableMagicLink) {
+        try {
+          await sendWelcomeEmail(email, await generateMagicLink(email));
+          emailsSent++;
+        } catch (emailError) {
+          logger.error('Failed to send welcome email:', emailError);
+          emailsFailed++;
+        }
+      }
+    }
+
+    res.json({ created: created.length, skipped, emailsSent, emailsFailed });
+  } catch (error) {
+    logger.error('Error bulk creating users:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // PATCH /api/users/:id - Update user (name and/or email)
 router.patch('/users/:id', requireAdmin, async (req, res) => {
   try {

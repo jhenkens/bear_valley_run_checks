@@ -98,6 +98,18 @@ export const api = {
     });
   },
 
+  async bulkCreateUsers(users: { name: string; email: string }[], sendEmails: boolean) {
+    return fetchJSON<{
+      created: number;
+      skipped: { name: string; email: string | null; reason: string }[];
+      emailsSent: number;
+      emailsFailed: number;
+    }>(`${API_BASE}/users/bulk`, {
+      method: 'POST',
+      body: JSON.stringify({ users, sendEmails }),
+    });
+  },
+
   async updateUser(userId: string, data: { email?: string | null; name?: string }) {
     return fetchJSON<{ user: any; message: string }>(`${API_BASE}/users/${userId}`, {
       method: 'PATCH',

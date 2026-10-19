@@ -30,6 +30,8 @@ export function createApp() {
     newUserEmail: '',
     newUserName: '',
     editingUserId: null as string | null,
+    bulkText: '',
+    bulkSendEmails: true,
     message: null as { type: 'success' | 'error' | 'warning'; text: string } | null,
     expandedSections: new Set<string>(),
     runSearchQuery: '',
@@ -41,6 +43,35 @@ export function createApp() {
     lastUpdated: null as Date | null, // Track last data update
 
     // Computed
+    get sortedUsers() {
+      return [...this.users].sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) ||
+        (a.email || '').localeCompare(b.email || ''));
+    },
+
+    // Lowercased names/emails that appear on more than one user
+    get duplicateUserKeys() {
+      const names = new Map<string, number>();
+      const emails = new Map<string, number>();
+      for (const u of this.users) {
+        const n = u.name.trim().toLowerCase();
+        names.set(n, (names.get(n) || 0) + 1);
+        if (u.email) {
+          const e = u.email.trim().toLowerCase();
+          emails.set(e, (emails.get(e) || 0) + 1);
+        }
+      }
+      return { names, emails };
+    },
+
+    isDuplicateName(u: any) {
+      return (this.duplicateUserKeys.names.get(u.name.trim().toLowerCase()) || 0) > 1;
+    },
+
+    isDuplicateEmail(u: any) {
+      return !!u.email && (this.duplicateUserKeys.emails.get(u.email.trim().toLowerCase()) || 0) > 1;
+    },
+
     get groupedRuns() {
       const runsWithColors = calculateRunColors(this.runs, this.checks);
       const grouped = groupRunsBySection(runsWithColors);
@@ -433,6 +464,70 @@ export function createApp() {
         await this.loadData();
       } catch (err: any) {
         this.error = err.message || 'Failed to create user';
+      }
+    },
+
+    // Parse pasted CSV: one user per line, "name,email" or "email,name"
+    // (also accepts "Name <email>" and an optional header row)
+    parseBulkUsers(text: string): { name: string; email: string }[] {
+      const splitCsv = (line: string) => {
+        const fields: string[] = [];
+        let cur = '';
+        let quoted = false;
+        for (let i = 0; i < line.length; i++) {
+          const c = line[i];
+          if (quoted) {
+            if (c === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+            else if (c === '"') quoted = false;
+            else cur += c;
+          } else if (c === '"') quoted = true;
+          else if (c === ',' || c === '\t' || c === ';') { fields.push(cur.trim()); cur = ''; }
+          else cur += c;
+        }
+        fields.push(cur.trim());
+        return fields;
+      };
+      const rows: { name: string; email: string }[] = [];
+      for (const line of text.split(/\r?\n/)) {
+        if (!line.trim()) continue;
+        const fields = splitCsv(line).filter(f => f);
+        let name = '';
+        let email = '';
+        for (const f of fields) {
+          const angle = f.match(/^(.*?)\s*<([^>]+@[^>]+)>$/);
+          if (angle) { name = angle[1].replace(/^"|"$/g, '').trim(); email = angle[2].trim(); }
+          else if (f.includes('@') && !email) email = f;
+          else if (!name) name = f;
+        }
+        if (/^name$/i.test(name) && /^e-?mail$/i.test(email || fields[1] || '')) continue; // header
+        if (/^(name|e-?mail)$/i.test(fields[0] || '') && !email) continue;
+        if (name || email) rows.push({ name, email });
+      }
+      return rows;
+    },
+
+    async bulkCreateUsers() {
+      try {
+        this.error = null;
+        const rows = this.parseBulkUsers(this.bulkText);
+        if (rows.length === 0) {
+          this.error = 'Nothing to upload';
+          return;
+        }
+        const res = await api.bulkCreateUsers(rows, this.bulkSendEmails);
+        const parts = [`Created ${res.created} user(s)`];
+        if (this.bulkSendEmails) parts.push(`${res.emailsSent} welcome email(s) sent`);
+        if (res.emailsFailed) parts.push(`${res.emailsFailed} email(s) failed`);
+        if (res.skipped.length) {
+          parts.push(`Skipped ${res.skipped.length}: ` +
+            res.skipped.map(s => `${s.name || s.email || '(blank)'} (${s.reason})`).join('; '));
+        }
+        this.showMessage(res.skipped.length || res.emailsFailed ? 'warning' : 'success', parts.join('. '));
+        // Keep only the skipped rows in the box so they can be fixed and retried
+        this.bulkText = res.skipped.map(s => `${s.name},${s.email || ''}`).join('\n');
+        await this.loadData();
+      } catch (err: any) {
+        this.error = err.message || 'Failed to bulk create users';
       }
     },
 

@@ -284,15 +284,31 @@ if (appRoot) {
             </div>
           </div>
 
+          <div class="confirm-list">
+            <h3>Bulk Add Users</h3>
+            <div class="form-group">
+              <label>Paste CSV, one user per line: <code>Name, email</code> (email optional)</label>
+              <textarea x-model="bulkText" rows="6" placeholder="Jane Doe, jane@example.com&#10;John Smith, john@example.com"></textarea>
+            </div>
+            <label style="display: block; margin-bottom: 0.5rem;">
+              <input type="checkbox" x-model="bulkSendEmails"> Send welcome emails
+            </label>
+            <button class="btn" @click="bulkCreateUsers" :disabled="!bulkText.trim()">Upload Users</button>
+          </div>
+
           <div class="user-table">
-            <template x-for="u in users" :key="u.id">
+            <template x-for="u in sortedUsers" :key="u.id">
               <div class="user-row">
                 <div class="user-info">
                   <div class="user-name">
-                    <span x-text="u.name"></span>
+                    <span x-text="u.name" :class="{ 'dup-warning': isDuplicateName(u) }"></span>
                     <span x-show="u.isSuperuser" class="user-badge">SUPERUSER</span>
+                    <span x-show="isDuplicateName(u)" class="dup-warning">⚠ Duplicate name</span>
                   </div>
-                  <div class="user-email" x-text="u.email || '(no email)'"></div>
+                  <div class="user-email" :class="{ 'dup-warning': isDuplicateEmail(u) }">
+                    <span x-text="u.email || '(no email)'"></span>
+                    <span x-show="isDuplicateEmail(u)">⚠ Duplicate email</span>
+                  </div>
                 </div>
                 <div class="user-actions">
                   <label>
