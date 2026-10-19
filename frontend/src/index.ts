@@ -290,10 +290,12 @@ if (appRoot) {
             <button class="btn" @click="bulkCreateUsers" :disabled="!bulkText.trim()">Upload Users</button>
           </div>
 
-          <div style="display: flex; justify-content: flex-end; margin-bottom: 0.5rem;">
-            <button class="btn" @click="sendWelcomeEmails" :disabled="welcomeSelectedIds.length === 0"
-              x-text="'Send Welcome Emails (' + welcomeSelectedIds.length + ')'"></button>
-          </div>
+          <div class="confirm-list">
+            <div class="users-header">
+              <h3>Users</h3>
+              <button class="btn" @click="sendWelcomeEmails" :disabled="welcomeSelectedIds.length === 0"
+                x-text="'Send Welcome Emails (' + welcomeSelectedIds.length + ')'"></button>
+            </div>
 
           <div class="user-table">
             <table>
@@ -364,6 +366,7 @@ if (appRoot) {
                 </template>
               </tbody>
             </table>
+          </div>
           </div>
 
           <div x-show="error" class="message error" x-text="error" style="margin-top: 1rem;"></div>
