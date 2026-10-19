@@ -668,6 +668,12 @@ body {
   border-bottom: 1px solid #eee;
 }
 
+.checked-today {
+  float: right;
+  font-size: 0.8rem;
+  color: #27ae60;
+}
+
 .autocomplete-item:hover {
   background: #f5f5f5;
 }

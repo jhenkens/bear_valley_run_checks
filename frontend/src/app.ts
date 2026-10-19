@@ -24,7 +24,6 @@ export function createApp() {
     confirmPatroller: '',
     confirmTime: '',
     patrollerSearch: '',
-    filteredPatrollers: [] as string[],
     showAutocomplete: false,
     users: [] as any[],
     newUserEmail: '',
@@ -130,6 +129,18 @@ export function createApp() {
 
     isDuplicateEmail(u: any) {
       return !!u.email && (this.duplicateUserKeys.emails.get(u.email.trim().toLowerCase()) || 0) > 1;
+    },
+
+    // Patrollers matching the search, those who have run checked today first (not everyone works every day), then alphabetical
+    get filteredPatrollers() {
+      const search = this.patrollerSearch.toLowerCase();
+      const checkedToday = new Set(this.checks.map((c: any) => c.patroller.trim().toLowerCase()));
+      return this.patrollers
+        .filter(p => p.toLowerCase().includes(search))
+        .map(p => ({ name: p, checkedToday: checkedToday.has(p.trim().toLowerCase()) }))
+        .sort((a, b) =>
+          Number(b.checkedToday) - Number(a.checkedToday) ||
+          a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
     },
 
     get groupedRuns() {
@@ -289,7 +300,6 @@ export function createApp() {
           createdAt: new Date(c.createdAt * 1000),
         }));
         this.patrollers = statusRes.patrollers;
-        this.filteredPatrollers = statusRes.patrollers;
         this.lastUpdated = new Date(); // Update last refresh time
 
         if (this.user.isAdmin) {
@@ -488,11 +498,13 @@ export function createApp() {
 
     // Autocomplete
     filterPatrollers() {
-      const search = this.patrollerSearch.toLowerCase();
-      this.filteredPatrollers = this.patrollers.filter(p =>
-        p.toLowerCase().includes(search)
-      );
-      this.showAutocomplete = this.patrollerSearch.length > 0;
+      this.showAutocomplete = true;
+    },
+
+    // Focusing the box clears it so a different patroller can be searched right away
+    focusPatroller() {
+      this.clearPatroller();
+      this.showAutocomplete = true;
     },
 
     selectPatroller(patroller: string) {

@@ -145,15 +145,18 @@ if (appRoot) {
             </div>
 
             <div class="confirm-list">
-              <div class="form-group autocomplete">
+              <div class="form-group autocomplete" @click.outside="showAutocomplete = false">
                 <label>Patroller</label>
                 <div class="input-with-clear">
-                  <input type="text" x-model="patrollerSearch" @input="filterPatrollers" @focus="showAutocomplete = patrollerSearch.length > 0" placeholder="Search patroller...">
+                  <input type="text" x-model="patrollerSearch" @input="filterPatrollers" @focus="focusPatroller" placeholder="Search patroller...">
                   <button type="button" class="clear-btn" x-show="patrollerSearch.length > 0" @click="clearPatroller">&times;</button>
                 </div>
                 <div class="autocomplete-dropdown" x-show="showAutocomplete">
-                  <template x-for="p in filteredPatrollers" :key="p">
-                    <div class="autocomplete-item" @click="selectPatroller(p)" x-text="p"></div>
+                  <template x-for="p in filteredPatrollers" :key="p.name">
+                    <div class="autocomplete-item" @click="selectPatroller(p.name)">
+                      <span x-text="p.name"></span>
+                      <span x-show="p.checkedToday" class="checked-today">✓ checked today</span>
+                    </div>
                   </template>
                 </div>
               </div>
