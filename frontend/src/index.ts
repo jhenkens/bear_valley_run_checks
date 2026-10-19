@@ -304,18 +304,18 @@ if (appRoot) {
             <table>
               <thead>
                 <tr>
-                  <th class="sortable" @click="sortUsersBy('name')">Name <span x-text="sortIndicator('name')"></span></th>
-                  <th class="sortable" @click="sortUsersBy('email')">Email <span x-text="sortIndicator('email')"></span></th>
-                  <th class="sortable" @click="sortUsersBy('createdAt')">Date Added <span x-text="sortIndicator('createdAt')"></span></th>
-                  <th>Admin</th>
-                  <th>
+                  <th class="col-name sortable" @click="sortUsersBy('name')">Name <span x-text="sortIndicator('name')"></span></th>
+                  <th class="col-email sortable" @click="sortUsersBy('email')">Email <span x-text="sortIndicator('email')"></span></th>
+                  <th class="col-date sortable" @click="sortUsersBy('createdAt')">Date Added <span x-text="sortIndicator('createdAt')"></span></th>
+                  <th class="col-admin">Admin</th>
+                  <th class="col-welcome">
                     <label title="Select all / none">
                       <input type="checkbox" :checked="allWelcomeSelected" @change="toggleAllWelcome()"
                         :disabled="welcomeEligibleUsers.length === 0">
                       Send welcome
                     </label>
                   </th>
-                  <th></th>
+                  <th class="col-actions"></th>
                 </tr>
               </thead>
               <tbody>
@@ -346,7 +346,12 @@ if (appRoot) {
                     </td>
                     <td x-text="formatUserDate(u.createdAt)"></td>
                     <td>
-                      <input type="checkbox" :checked="u.isAdmin" @change="toggleAdmin(u)" :disabled="u.isSuperuser">
+                      <template x-if="editingUserId === u.id">
+                        <input type="checkbox" :checked="u.isAdmin" @change="toggleAdmin(u)" :disabled="u.isSuperuser">
+                      </template>
+                      <template x-if="editingUserId !== u.id">
+                        <span x-show="u.isAdmin" title="Admin">✓</span>
+                      </template>
                     </td>
                     <td>
                       <input type="checkbox" x-model="welcomeSelected[u.id]" :disabled="!u.email">

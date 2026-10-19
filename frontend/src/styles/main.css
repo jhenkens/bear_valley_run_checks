@@ -541,7 +541,22 @@ body {
 
 .user-table table {
   width: 100%;
+  min-width: 60rem;
   border-collapse: collapse;
+  table-layout: fixed; /* column widths stay put when a row switches to edit mode */
+}
+
+.user-table .col-name { width: 20%; }
+.user-table .col-email { width: 24%; }
+.user-table .col-date { width: 11rem; }
+.user-table .col-admin { width: 5rem; }
+.user-table .col-welcome { width: 9rem; }
+.user-table .col-actions { width: 15rem; }
+
+.user-table td input[type="text"],
+.user-table td input[type="email"] {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .user-table th,
@@ -549,7 +564,7 @@ body {
   padding: 0.75rem 1rem;
   text-align: left;
   border-bottom: 1px solid #eee;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .user-table th {
