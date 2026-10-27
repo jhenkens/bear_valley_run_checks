@@ -33,24 +33,80 @@ body {
   font-weight: 600;
 }
 
-.header-user {
-  font-size: 0.75em;
-  color: #e0e0e0;
-  margin-top: 0.25rem;
-  overflow-wrap: anywhere;
-}
-
-.header button {
-  background: #e74c3c;
-  color: white;
-  border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.9rem;
-}
-
 /* Tabs */
+.tabbar {
+  position: relative;
+  display: flex;
+  background: white;
+  border-bottom: 1px solid #ddd;
+}
+
+.tabbar .tabs {
+  flex: 1;
+  border-bottom: none;
+}
+
+.menu-btn {
+  width: 56px;
+  border: none;
+  border-bottom: 3px solid transparent;
+  background: white;
+  color: #666;
+  font-size: 1.4rem;
+  cursor: pointer;
+}
+
+.menu-btn.active {
+  border-bottom-color: #3498db;
+  color: #3498db;
+}
+
+.menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 10;
+  min-width: 180px;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 0 0 8px 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.menu-item {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 1rem;
+  border: none;
+  background: white;
+  text-align: left;
+  font-size: 1rem;
+  color: #2c3e50;
+  cursor: pointer;
+}
+
+.menu-user {
+  padding: 0.75rem 1rem;
+  font-size: 0.85rem;
+  color: #666;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid #eee;
+}
+
+.menu-item.menu-danger {
+  color: #e74c3c;
+}
+
+.menu-item + .menu-item {
+  border-top: 1px solid #eee;
+}
+
+.menu-item.active {
+  color: #3498db;
+  font-weight: 600;
+}
+
 .tabs {
   display: flex;
   background: white;
@@ -757,4 +813,12 @@ body {
     font-size: 0.85rem;
     padding: 0.75rem 0.5rem;
   }
+}
+
+/* A header inside a section card is part of that card, not a second card on top of it */
+.section-runs > .section-header,
+.history-section > .section-header {
+  margin-bottom: 0;
+  border-radius: 0;
+  box-shadow: none;
 }

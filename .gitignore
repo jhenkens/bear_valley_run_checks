@@ -11,6 +11,9 @@ dist/
 build/
 *.log
 
+# Runtime data (sessions)
+data/
+
 # Database
 *.db
 *.db-journal

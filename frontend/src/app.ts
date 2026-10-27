@@ -16,6 +16,7 @@ export function createApp() {
     loading: true,
     error: null as string | null,
     user: null as any,
+    menuOpen: false,
     currentTab: 'runs' as 'runs' | 'history' | 'patrollers' | 'admin' | 'account',
     oidcProvider: null as { name: string } | null,
     passkeys: [] as any[],
@@ -254,6 +255,11 @@ export function createApp() {
       }
       // Sort by patroller name alphabetically
       return Array.from(grouped.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+    },
+
+    // The menu holds the less-used pages, so its button lights up while one of them is open
+    get isMenuTabActive() {
+      return this.currentTab !== 'runs';
     },
 
     // Init
@@ -628,9 +634,23 @@ export function createApp() {
       return text;
     },
 
+    toggleMenu() {
+      this.menuOpen = !this.menuOpen;
+    },
+
+    closeMenu() {
+      this.menuOpen = false;
+    },
+
+    openMenuTab(tab: 'history' | 'patrollers' | 'account' | 'admin') {
+      this.closeMenu();
+      this.switchTab(tab);
+    },
+
     // Tabs
     switchTab(tab: typeof this.currentTab) {
       this.currentTab = tab;
+      this.menuOpen = false;
       this.showConfirm = false;
       // Clear search when switching away from runs tab
       if (tab !== 'runs') {

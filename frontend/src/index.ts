@@ -66,11 +66,7 @@ if (appRoot) {
             <div x-show="lastUpdated" style="font-size: 0.75em; color: #e0e0e0; margin-top: 0.25rem;">
               Last updated: <span x-text="lastUpdated ? lastUpdated.toLocaleTimeString() : ''"></span>
             </div>
-            <div class="header-user" x-show="user">
-              Signed in as <strong x-text="userName()"></strong><span x-show="user && user.email" x-text="userEmailLabel()"></span>
-            </div>
           </div>
-          <button @click="logout">Logout</button>
         </div>
 
         <!-- System Notifications -->
@@ -103,12 +99,21 @@ if (appRoot) {
         <div x-show="message" :class="messageClass()" x-text="message && message.text" style="margin: 1rem;"></div>
 
         <!-- Tabs -->
-        <div class="tabs" x-show="!showConfirm">
-          <button class="tab" :class="currentTab === 'runs' && 'active'" @click="switchTab('runs')">Runs</button>
-          <button class="tab" :class="currentTab === 'history' && 'active'" @click="switchTab('history')">History</button>
-          <button class="tab" :class="currentTab === 'patrollers' && 'active'" @click="switchTab('patrollers')">Patrollers</button>
-          <button class="tab" :class="currentTab === 'account' && 'active'" @click="switchTab('account')">Account</button>
-          <button class="tab" :class="currentTab === 'admin' && 'active'" @click="switchTab('admin')" x-show="user && user.isAdmin">Admin</button>
+        <div class="tabbar" x-show="!showConfirm" @click.outside="closeMenu">
+          <div class="tabs">
+            <button class="tab" :class="currentTab === 'runs' && 'active'" @click="switchTab('runs')">Runs</button>
+          </div>
+          <button class="menu-btn" :class="isMenuTabActive && 'active'" @click="toggleMenu" aria-label="Menu" :aria-expanded="menuOpen">☰</button>
+          <div class="menu" x-show="menuOpen">
+            <div class="menu-user">
+              Signed in as <strong x-text="userName()"></strong><span x-show="user && user.email" x-text="userEmailLabel()"></span>
+            </div>
+            <button class="menu-item" :class="currentTab === 'history' && 'active'" @click="openMenuTab('history')">History</button>
+            <button class="menu-item" :class="currentTab === 'patrollers' && 'active'" @click="openMenuTab('patrollers')">Patrollers seen today</button>
+            <button class="menu-item" :class="currentTab === 'account' && 'active'" @click="openMenuTab('account')">Account</button>
+            <button class="menu-item" :class="currentTab === 'admin' && 'active'" @click="openMenuTab('admin')" x-show="user && user.isAdmin">Admin</button>
+            <button class="menu-item menu-danger" @click="logout">Logout</button>
+          </div>
         </div>
 
         <!-- Runs Tab -->

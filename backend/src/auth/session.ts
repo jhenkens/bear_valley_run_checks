@@ -1,3 +1,4 @@
+import fs from 'fs';
 import session from 'express-session';
 import createSqliteStore from 'connect-sqlite3';
 import { appConfig } from '../config/config';
@@ -9,6 +10,8 @@ let sessionMiddleware: ReturnType<typeof session> | null = null;
 // One shared instance, so Express and Socket.IO read the same session store
 export function createSessionMiddleware() {
   if (sessionMiddleware) return sessionMiddleware;
+  // The sqlite store won't create its directory, and fails with SQLITE_CANTOPEN if it's missing
+  fs.mkdirSync('./data', { recursive: true });
   const isProduction = process.env.NODE_ENV === 'production';
   const isHttps = process.env.HTTPS === 'true' || (isProduction && !process.env.HTTPS);
   
