@@ -2,7 +2,11 @@ import { io, Socket } from 'socket.io-client';
 
 let socket: Socket | null = null;
 
-export function connectSocket(onRunCheckNew: (data: any) => void, onReconnect?: () => void): Socket {
+export function connectSocket(
+  onRunCheckNew: (data: any) => void,
+  onReconnect?: () => void,
+  onBoardChanged?: () => void,
+): Socket {
   if (socket) {
     return socket;
   }
@@ -31,6 +35,12 @@ export function connectSocket(onRunCheckNew: (data: any) => void, onReconnect?: 
 
   socket.on('runcheck:new', (data) => {
     onRunCheckNew(data);
+  });
+
+  socket.on('board:changed', () => {
+    if (onBoardChanged) {
+      onBoardChanged();
+    }
   });
 
   return socket;

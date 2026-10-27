@@ -11,7 +11,7 @@ dist/
 build/
 *.log
 
-# Runtime data (sessions)
+# Runtime data (sessions, board photos)
 data/
 
 # Database

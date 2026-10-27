@@ -14,6 +14,40 @@ export interface RunCheck extends RunCheckSubmit {
   createdAt: number; // epoch seconds
 }
 
+export interface BoardPhotoRef {
+  id: string;
+}
+
+export interface BoardItem {
+  id: string;
+  description: string;
+  section: string;
+  authorName: string;
+  authorId: string | null;
+  createdAt: number; // epoch seconds
+  isTask: boolean;
+  dueDate: string | null; // yyyy-MM-dd
+  dueHour: number | null; // 8-16; null = end of day (5 PM)
+  assignee: string | null;
+  doneAt: number | null; // epoch seconds
+  doneBy: string | null;
+  debriefDate: string | null;
+  morningBriefDate: string | null;
+  photos: string[]; // photo ids, served from /api/board/photos/:id
+}
+
+export interface BoardItemInput {
+  description?: string;
+  section?: string;
+  isTask?: boolean;
+  dueDate?: string | null;
+  dueHour?: number | null;
+  assignee?: string | null;
+  debriefDate?: string | null; // pin for that day's debrief, yyyy-MM-dd (null to unpin)
+  morningBriefDate?: string | null; // pin for that morning's brief
+  done?: boolean;
+}
+
 class ApiError extends Error {
   constructor(public status: number, message: string) {
     super(message);
@@ -60,7 +94,7 @@ export const api = {
   },
 
   async getMe() {
-    return fetchJSON<{ user: any }>(`${AUTH_BASE}/me`);
+    return fetchJSON<{ user: any; features?: { board?: boolean } }>(`${AUTH_BASE}/me`);
   },
 
   async getLoginProviders() {
@@ -173,6 +207,48 @@ export const api = {
     return fetchJSON<{ message: string }>(`${API_BASE}/users/${userId}`, {
       method: 'DELETE',
     });
+  },
+
+  // Patrol board
+  async getBoard() {
+    return fetchJSON<{ items: BoardItem[]; sections: string[]; today: string }>(`${API_BASE}/board`);
+  },
+
+  async createBoardItem(data: BoardItemInput) {
+    return fetchJSON<{ item: BoardItem }>(`${API_BASE}/board`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateBoardItem(id: string, data: BoardItemInput) {
+    return fetchJSON<{ item: BoardItem }>(`${API_BASE}/board/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async copyBoardItem(id: string, data: { to: 'tasks' | 'debrief' | 'brief'; date?: string; assignee?: string; dueDate?: string; dueHour?: number }) {
+    return fetchJSON<{ item: BoardItem }>(`${API_BASE}/board/${id}/copy`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteBoardItem(id: string) {
+    return fetchJSON<{ message: string }>(`${API_BASE}/board/${id}`, { method: 'DELETE' });
+  },
+
+  async uploadBoardPhoto(itemId: string, photo: Blob) {
+    return fetchJSON<{ photo: BoardPhotoRef }>(`${API_BASE}/board/${itemId}/photos`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'image/jpeg' },
+      body: photo,
+    });
+  },
+
+  async deleteBoardPhoto(photoId: string) {
+    return fetchJSON<{ message: string }>(`${API_BASE}/board/photos/${photoId}`, { method: 'DELETE' });
   },
 
   // Google OAuth

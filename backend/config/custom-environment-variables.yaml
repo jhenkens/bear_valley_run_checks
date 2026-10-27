@@ -19,3 +19,7 @@ oidc:
   requireVerifiedEmail:
     __name: OIDC_REQUIRE_VERIFIED_EMAIL
     __format: boolean
+board:
+  enabled:
+    __name: BOARD_ENABLED
+    __format: boolean

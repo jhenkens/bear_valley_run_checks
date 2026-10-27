@@ -9,6 +9,10 @@ enableLoginWithoutPassword: true
 # When true, login/user creation will return tokens directly in the response
 disableMagicLink: true
 
+# Patrol Board on for local testing (in production, set BOARD_ENABLED=true)
+board:
+  enabled: true
+
 # Patrollers who don't have accounts yet
 patrollers:
   - John Doe

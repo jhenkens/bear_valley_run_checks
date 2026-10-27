@@ -102,6 +102,7 @@ if (appRoot) {
         <div class="tabbar" x-show="!showConfirm" @click.outside="closeMenu">
           <div class="tabs">
             <button class="tab" :class="currentTab === 'runs' && 'active'" @click="switchTab('runs')">Runs</button>
+            <button class="tab" :class="currentTab === 'board' && 'active'" @click="switchTab('board')" x-show="features.board">Board</button>
           </div>
           <button class="menu-btn" :class="isMenuTabActive && 'active'" @click="toggleMenu" aria-label="Menu" :aria-expanded="menuOpen">☰</button>
           <div class="menu" x-show="menuOpen">
@@ -169,6 +170,59 @@ if (appRoot) {
           </template>
         </div>
 
+        <!-- History Page: every run with today's checks -->
+        <div class="content" x-show="currentTab === 'history' && !showConfirm">
+          <template x-for="[section, runs] in historyBySection" :key="section">
+            <div class="section-runs">
+              <div class="section-header" @click="toggleSection('history-' + section)" style="cursor: pointer; user-select: none;">
+                <h3>
+                  <span x-text="isSectionExpanded('history-' + section) ? '▼' : '▶'" style="display: inline-block; width: 1.2em;"></span>
+                  <span x-text="section"></span>
+                  <span style="font-size: 0.85em; font-weight: normal; margin-left: 0.5rem; color: #666;" x-text="'(' + runs.length + ')'"></span>
+                </h3>
+              </div>
+              <div x-show="isSectionExpanded('history-' + section)">
+                <template x-for="run in runs" :key="run.runName">
+                  <div>
+                    <div class="run-item">
+                      <div class="run-info">
+                        <div class="run-name" x-text="run.runName"></div>
+                        <div x-show="run.checks.length === 0" class="run-time" style="color: #999; font-style: italic;">No checks</div>
+                        <template x-for="check in run.checks" :key="check.id">
+                        <div class="run-time" x-text="formatClockTime(check.checkTime) + ' - ' + check.patroller"></div>
+                        </template>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </template>
+        </div>
+
+        <!-- Patrollers Page: who has checked something today -->
+        <div class="content" x-show="currentTab === 'patrollers' && !showConfirm">
+          <template x-for="[patroller, patrollerChecks] in checksByPatroller" :key="patroller">
+            <div class="history-section">
+              <div class="section-header" @click="toggleSection('patroller-' + patroller)" style="cursor: pointer; user-select: none;">
+                <h3>
+                  <span x-text="isSectionExpanded('patroller-' + patroller) ? '▼' : '▶'" style="display: inline-block; width: 1.2em;"></span>
+                  <span x-text="patroller"></span>
+                  <span style="font-size: 0.85em; font-weight: normal; margin-left: 0.5rem; color: #666;" x-text="'(' + patrollerChecks.length + ')'"></span>
+                </h3>
+              </div>
+              <div x-show="isSectionExpanded('patroller-' + patroller)">
+                <template x-for="check in patrollerChecks" :key="check.id">
+                  <div class="history-item">
+                    <div class="history-run" x-text="check.runName + ' (' + check.section + ')'"></div>
+                    <div class="history-details" x-text="formatClockTime(check.checkTime)"></div>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </template>
+          <div x-show="checks.length === 0" class="message">No checks today</div>
+        </div>
+
         <!-- Confirm Page -->
         <div class="content" x-show="showConfirm">
           <div class="confirm-container">
@@ -214,57 +268,194 @@ if (appRoot) {
           </div>
         </div>
 
-        <!-- History Tab -->
-        <div class="content" x-show="currentTab === 'history'">
-          <template x-for="[section, runs] in historyBySection" :key="section">
-            <div class="section-runs">
-              <div class="section-header" @click="toggleSection('history-' + section)" style="cursor: pointer; user-select: none;">
-                <h3>
-                  <span x-text="isSectionExpanded('history-' + section) ? '▼' : '▶'" style="display: inline-block; width: 1.2em;"></span>
-                  <span x-text="section"></span>
-                  <span style="font-size: 0.85em; font-weight: normal; margin-left: 0.5rem; color: #666;" x-text="'(' + runs.length + ')'"></span>
-                </h3>
+        <!-- Board Tab -->
+        <div class="content" x-show="currentTab === 'board' && features.board && !showConfirm">
+          <div class="board-create">
+            <textarea
+              class="board-input"
+              x-model="boardForm.description"
+              @input="saveBoardDraft"
+              rows="2"
+              maxlength="1000"
+              placeholder="What came up? (rope line down, sign missing...)"
+            ></textarea>
+
+            <div class="board-more" x-show="boardForm.showMore">
+              <div class="form-group">
+                <label>Add to</label>
+                <select x-model="boardForm.location">
+                  <template x-for="t in boardTargets" :key="t.value">
+                    <option :value="t.value" x-text="t.label"></option>
+                  </template>
+                </select>
               </div>
-              <div x-show="isSectionExpanded('history-' + section)">
-                <template x-for="run in runs" :key="run.runName">
-                  <div>
-                    <div class="run-item">
-                      <div class="run-info">
-                        <div class="run-name" x-text="run.runName"></div>
-                        <div x-show="run.checks.length === 0" class="run-time" style="color: #999; font-style: italic;">No checks</div>
-                        <template x-for="check in run.checks" :key="check.id">
-                        <div class="run-time" x-text="formatClockTime(check.checkTime) + ' - ' + check.patroller"></div>
-                        </template>
+              <div class="form-group">
+                <label>Section</label>
+                <select x-model="boardForm.section">
+                  <template x-for="s in boardSections" :key="s">
+                    <option :value="s" x-text="s"></option>
+                  </template>
+                </select>
+              </div>
+              <div class="form-group" x-show="boardForm.location === 'tasks'">
+                <label>Assignee</label>
+                <div class="board-inline">
+                  <div class="autocomplete" @click.outside="closeBoardAssignee">
+                    <div class="input-with-clear">
+                      <input type="text" x-model="boardForm.assignee" @input="openBoardAssignee('form')" @focus="openBoardAssignee('form')" placeholder="Unassigned">
+                      <button type="button" class="clear-btn" x-show="boardForm.assignee.length > 0" @click="clearBoardAssignee('form')" aria-label="Clear assignee">&times;</button>
+                    </div>
+                    <div class="autocomplete-dropdown" x-show="boardAssigneeOpen === 'form'">
+                      <template x-for="p in boardAssigneeMatches('form')" :key="p.name">
+                        <div class="autocomplete-item" @click="pickBoardAssignee('form', p.name)">
+                          <span x-text="p.name"></span>
+                          <span x-show="p.checkedToday" class="checked-today">✓ checked today</span>
+                        </div>
+                      </template>
                     </div>
                   </div>
-                </template>
+                  <button type="button" class="board-btn" @click="assignBoardToMe('form')">Me</button>
+                </div>
               </div>
-            </div>
-          </template>
-        </div>
+              <div class="form-group" x-show="boardForm.location === 'tasks'">
+                <label>Due date <small>(blank = today, if it's a task)</small></label>
+                <div class="board-due">
+                  <input type="date" x-model="boardForm.dueDate">
+                  <select x-model="boardForm.dueHour" aria-label="Due time">
+                    <template x-for="h in boardDueHours" :key="h.value">
+                      <option :value="h.value" x-text="h.label"></option>
+                    </template>
+                  </select>
+                </div>
+              </div>
 
-        <!-- Patrollers Tab -->
-        <div class="content" x-show="currentTab === 'patrollers'">
-          <template x-for="[patroller, patrollerChecks] in checksByPatroller" :key="patroller">
-            <div class="history-section">
-              <div class="section-header" @click="toggleSection('patroller-' + patroller)" style="cursor: pointer; user-select: none;">
-                <h3>
-                  <span x-text="isSectionExpanded('patroller-' + patroller) ? '▼' : '▶'" style="display: inline-block; width: 1.2em;"></span>
-                  <span x-text="patroller"></span>
-                  <span style="font-size: 0.85em; font-weight: normal; margin-left: 0.5rem; color: #666;" x-text="'(' + patrollerChecks.length + ')'"></span>
-                </h3>
-              </div>
-              <div x-show="isSectionExpanded('patroller-' + patroller)">
-                <template x-for="check in patrollerChecks" :key="check.id">
-                  <div class="history-item">
-                    <div class="history-run" x-text="check.runName + ' (' + check.section + ')'"></div>
-                    <div class="history-details" x-text="formatClockTime(check.checkTime)"></div>
+              <div class="board-photos" x-show="boardForm.photoUrls.length > 0">
+                <template x-for="url in boardForm.photoUrls" :key="url">
+                  <div class="board-photo">
+                    <img :src="url" alt="Photo to upload">
+                    <button type="button" class="photo-del" @click="removeBoardFormPhoto(url)" aria-label="Remove photo">✕</button>
                   </div>
                 </template>
               </div>
+              <label class="board-btn board-btn-block" x-show="boardForm.photoUrls.length < 3">
+                📷 Attach photo
+                <input type="file" accept="image/*" multiple hidden @change="addBoardFormPhotos($event)">
+              </label>
+            </div>
+
+            <div class="board-create-row">
+              <button class="btn btn-success" @click="createBoardItem" :disabled="!canCreateBoardItem">
+                <span x-text="isCreatingBoardItem ? 'Saving...' : 'Create'"></span>
+              </button>
+              <button class="board-btn" @click="toggleBoardMore" x-text="boardForm.showMore ? 'Less' : 'More'"></button>
+            </div>
+            <div x-show="boardError" class="message error" x-text="boardError" style="margin-top: 0.5rem;"></div>
+          </div>
+
+          <input type="file" id="board-card-photo" accept="image/*" style="display: none;" @change="uploadBoardCardPhoto($event)">
+
+          <div x-show="boardGroups.length === 0" class="message">Nothing on the board yet</div>
+
+          <template x-for="group in boardGroups" :key="group.key">
+            <div class="board-group">
+              <h3 class="board-group-title" @click="toggleBoardGroup(group.key)">
+                <span x-text="isBoardGroupCollapsed(group.key) ? '▶' : '▼'" style="display: inline-block; width: 1.2em;"></span>
+                <span x-text="group.title"></span>
+                <span class="board-count" x-text="'(' + group.items.length + ')'"></span>
+              </h3>
+              <div x-show="!isBoardGroupCollapsed(group.key)">
+              <template x-for="item in group.items" :key="item.id">
+                <div class="board-card" :class="(item.doneAt ? 'done ' : '') + (showBoardTaskInfo(item) && isBoardOverdue(item) ? 'overdue' : '')">
+                  <div class="board-badges" x-show="boardHasBadges(item)">
+                    <span class="badge" x-show="item.section !== 'General'" x-text="item.section"></span>
+                    <span class="badge" :class="isBoardOverdue(item) && 'badge-alert'" x-show="showBoardTaskInfo(item) && item.dueDate" x-text="boardDueLabel(item)"></span>
+                    <span class="badge" :class="!item.assignee && 'badge-alert'" x-show="showBoardTaskInfo(item) && !item.doneAt" x-text="item.assignee || 'Unassigned'"></span>
+                    <span class="badge badge-done" x-show="item.doneAt" x-text="'Done · ' + item.doneBy"></span>
+                  </div>
+                  <div class="board-text" x-text="item.description"></div>
+                  <div class="board-meta" x-text="boardItemMeta(item)"></div>
+
+                  <div class="board-photos" x-show="item.photos.length > 0">
+                    <template x-for="photoId in item.photos" :key="photoId">
+                      <div class="board-photo">
+                        <a :href="boardPhotoUrl(photoId)" target="_blank" rel="noopener">
+                          <img :src="boardPhotoUrl(photoId)" loading="lazy" alt="Photo">
+                        </a>
+                        <button type="button" class="photo-del" x-show="isBoardExpanded(item)" @click="askDeleteBoardPhoto(photoId)" aria-label="Delete photo">✕</button>
+                      </div>
+                    </template>
+                  </div>
+
+                  <div class="board-actions">
+                    <button class="board-btn" x-show="showBoardTaskInfo(item) && !item.assignee && !item.doneAt" @click="takeBoardTask(item)">Take it</button>
+                    <button class="board-btn" :class="item.doneAt && 'on'" x-show="showBoardTaskInfo(item)" @click="toggleBoardDone(item)" x-text="item.doneAt ? 'Reopen' : 'Done'"></button>
+                    <button class="board-btn" x-show="boardLocationKind(item) === 'debrief' && boardCopyBriefReady" @click="copyToNextBoardBrief(item)" x-text="boardCopyBriefLabel(item)"></button>
+                    <button class="board-btn" x-show="boardLocationKind(item) === 'brief'" @click="askCopyBoardItem(item, 'tasks')">Copy to Task</button>
+                    <button class="board-btn board-more-btn" @click="toggleBoardExpanded(item)" aria-label="More options">⋯</button>
+                  </div>
+
+                  <div class="board-expanded" x-show="isBoardExpanded(item)">
+                    <div class="form-group">
+                      <label>Move to</label>
+                      <select x-model="boardEdit.moveTo">
+                        <option value="">Choose...</option>
+                        <template x-for="t in boardTargetsFor(item)" :key="t.value">
+                          <option :value="t.value" x-text="t.label"></option>
+                        </template>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label>Copy to</label>
+                      <select @change="askCopyFromPanel(item, $event)">
+                        <option value="">Choose...</option>
+                        <template x-for="t in boardTargetsFor(item)" :key="t.value">
+                          <option :value="t.value" x-text="t.label"></option>
+                        </template>
+                      </select>
+                    </div>
+                    <div class="form-group" x-show="boardEditLocation === 'tasks'">
+                      <label>Assignee</label>
+                      <div class="board-inline">
+                        <div class="autocomplete" @click.outside="closeBoardAssignee">
+                          <div class="input-with-clear">
+                            <input type="text" x-model="boardEdit.assignee" @input="openBoardAssignee('edit')" @focus="openBoardAssignee('edit')" placeholder="Unassigned">
+                            <button type="button" class="clear-btn" x-show="boardEdit.assignee.length > 0" @click="clearBoardAssignee('edit')" aria-label="Clear assignee">&times;</button>
+                          </div>
+                          <div class="autocomplete-dropdown" x-show="boardAssigneeOpen === 'edit'">
+                            <template x-for="p in boardAssigneeMatches('edit')" :key="p.name">
+                              <div class="autocomplete-item" @click="pickBoardAssignee('edit', p.name)">
+                                <span x-text="p.name"></span>
+                                <span x-show="p.checkedToday" class="checked-today">✓ checked today</span>
+                              </div>
+                            </template>
+                          </div>
+                        </div>
+                        <button type="button" class="board-btn" @click="assignBoardToMe('edit')">Me</button>
+                      </div>
+                    </div>
+                    <div class="form-group" x-show="boardEditLocation === 'tasks'">
+                      <label>Due date</label>
+                      <div class="board-due">
+                        <input type="date" x-model="boardEdit.dueDate">
+                        <select x-model="boardEdit.dueHour" aria-label="Due time">
+                          <template x-for="h in boardDueHours" :key="h.value">
+                            <option :value="h.value" x-text="h.label"></option>
+                          </template>
+                        </select>
+                      </div>
+                    </div>
+                    <button class="board-btn board-btn-block" x-show="item.photos.length < 3" @click="pickBoardPhoto(item)">📷 Attach photo</button>
+                    <div class="board-actions">
+                      <button class="board-btn on" @click="saveBoardEdit(item)">Save</button>
+                      <button class="board-btn" @click="cancelBoardEdit">Cancel</button>
+                      <button class="board-btn board-danger" x-show="canDeleteBoardItem(item)" @click="askDeleteBoardItem(item)">Delete</button>
+                    </div>
+                  </div>
+                </div>
+              </template>
+              </div>
             </div>
           </template>
-          <div x-show="checks.length === 0" class="message">No checks today</div>
         </div>
 
         <!-- Account Tab -->
@@ -458,6 +649,67 @@ if (appRoot) {
           <div class="cart-actions">
             <button class="btn btn-clear" @click="clearCart">Clear</button>
             <button class="btn" @click="openConfirm">Continue</button>
+          </div>
+        </div>
+
+        <!-- Copy to... -->
+        <div class="modal-backdrop" x-show="boardCopyOpen" @click.self="cancelBoardCopy" @keydown.escape.window="cancelBoardCopy">
+          <div class="modal" role="dialog" aria-modal="true" aria-labelledby="board-copy-title">
+            <h3 id="board-copy-title" x-text="boardCopyTitle"></h3>
+            <p class="modal-quote" x-text="boardCopy.description"></p>
+            <p class="modal-note">Makes a new item. The original stays where it is.</p>
+            <div x-show="boardCopyIsTask" style="margin-top: 0.75rem;">
+              <div class="form-group">
+                <label>Assignee</label>
+                <div class="board-inline">
+                  <div class="autocomplete" @click.outside="closeBoardAssignee">
+                    <div class="input-with-clear">
+                      <input type="text" x-model="boardCopy.assignee" @input="openBoardAssignee('copy')" @focus="openBoardAssignee('copy')" placeholder="Unassigned">
+                      <button type="button" class="clear-btn" x-show="boardCopy.assignee.length > 0" @click="clearBoardAssignee('copy')" aria-label="Clear assignee">&times;</button>
+                    </div>
+                    <div class="autocomplete-dropdown" x-show="boardAssigneeOpen === 'copy'">
+                      <template x-for="p in boardAssigneeMatches('copy')" :key="p.name">
+                        <div class="autocomplete-item" @click="pickBoardAssignee('copy', p.name)">
+                          <span x-text="p.name"></span>
+                          <span x-show="p.checkedToday" class="checked-today">✓ checked today</span>
+                        </div>
+                      </template>
+                    </div>
+                  </div>
+                  <button type="button" class="board-btn" @click="assignBoardToMe('copy')">Me</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Due date <small>(blank = today)</small></label>
+                <div class="board-due">
+                  <input type="date" x-model="boardCopy.dueDate">
+                  <select x-model="boardCopy.dueHour" aria-label="Due time">
+                    <template x-for="h in boardDueHours" :key="h.value">
+                      <option :value="h.value" x-text="h.label"></option>
+                    </template>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div class="modal-actions">
+              <button class="board-btn" @click="cancelBoardCopy">Cancel</button>
+              <button class="board-btn on" @click="confirmBoardCopy">Copy</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="toast" x-show="boardToast" x-text="boardToast"></div>
+
+        <!-- Delete confirmation -->
+        <div class="modal-backdrop" x-show="boardDelete" @click.self="cancelBoardDelete" @keydown.escape.window="cancelBoardDelete">
+          <div class="modal" role="dialog" aria-modal="true" aria-labelledby="board-delete-title">
+            <h3 id="board-delete-title" x-text="boardDeleteTitle"></h3>
+            <p class="modal-quote" x-show="boardDelete && boardDelete.label" x-text="boardDelete ? boardDelete.label : ''"></p>
+            <p class="modal-note">This can't be undone.</p>
+            <div class="modal-actions">
+              <button class="board-btn" @click="cancelBoardDelete">Cancel</button>
+              <button class="board-btn board-btn-danger" @click="confirmBoardDelete">Delete</button>
+            </div>
           </div>
         </div>
       </div>

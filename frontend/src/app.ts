@@ -1,5 +1,7 @@
 import { api, ApiError } from './services/api';
+import type { BoardItem, BoardItemInput } from './services/api';
 import { detectDeviceName, isMobileDevice } from './utils/deviceName';
+import { resizeImageToJpeg } from './utils/image';
 import { connectSocket } from './services/socket';
 import { calculateRunColors, groupRunsBySection, formatTimeSince, RunWithColor } from './utils/colorLogic';
 import {
@@ -9,6 +11,41 @@ import {
   browserSupportsWebAuthn,
 } from '@simplewebauthn/browser';
 
+// Tasks with no due time are due at the end of the day, treated as 5 PM
+const END_OF_DAY_HOUR = 17;
+
+// Once the morning brief hour has passed, new brief items are for tomorrow's; likewise for the debrief
+const BRIEF_HOUR = 9;
+const DEBRIEF_HOUR = 17;
+
+// From this hour on, debrief cards offer a one-tap "Copy to morning brief" (before it they only have the ⋯ menu)
+const COPY_TO_BRIEF_HOUR = 16;
+
+// A board target is where an item lives: 'tasks', or 'brief:YYYY-MM-DD' / 'debrief:YYYY-MM-DD' for that day's meeting
+function addDays(date: string, days: number): string {
+  const [year, month, day] = date.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+}
+
+// "Mon 10/26"
+function formatBoardDay(date: string): string {
+  const [year, month, day] = date.split('-').map(Number);
+  const weekday = new Date(year, month - 1, day).toLocaleDateString(undefined, { weekday: 'short' });
+  return `${weekday} ${month}/${day}`;
+}
+
+function boardTargetLabel(target: string): string {
+  if (target === 'tasks') return 'Tasks';
+  const [kind, date] = target.split(':');
+  return `${formatBoardDay(date)} ${kind === 'brief' ? 'Morning brief' : 'Debrief'}`;
+}
+
+function formatBoardHour(hour: number): string {
+  return hour === 12 ? '12 PM' : hour > 12 ? `${hour - 12} PM` : `${hour} AM`;
+}
+
+type BoardPicker = 'form' | 'edit' | 'copy';
+
 export function createApp() {
   return {
     // State
@@ -17,7 +54,7 @@ export function createApp() {
     error: null as string | null,
     user: null as any,
     menuOpen: false,
-    currentTab: 'runs' as 'runs' | 'history' | 'patrollers' | 'admin' | 'account',
+    currentTab: 'runs' as 'runs' | 'board' | 'history' | 'patrollers' | 'admin' | 'account',
     oidcProvider: null as { name: string } | null,
     passkeys: [] as any[],
     passkeySupported: false,
@@ -60,6 +97,44 @@ export function createApp() {
     googleDriveWasDisconnected: false, // Track if we showed a disconnection warning
     _initialized: false, // Guard against double initialization
     lastUpdated: null as Date | null, // Track last data update
+
+    // Patrol board (only active when the server has board.enabled)
+    features: { board: false } as { board: boolean },
+    boardItems: [] as BoardItem[],
+    boardSections: ['General'] as string[],
+    boardToday: '',
+    boardError: null as string | null,
+    isCreatingBoardItem: false,
+    boardAssigneeOpen: '' as '' | BoardPicker, // which assignee picker's list is showing
+    collapsedBoardGroups: new Set<string>(),
+    boardExpandedId: null as string | null,
+    // Draft of the open edit panel; nothing reaches the server until Save
+    boardEdit: { current: 'tasks', moveTo: '', assignee: '', dueDate: '', dueHour: '' },
+    // 8 AM to 4 PM in hour steps; blank = end of day. Values are strings because <select> binds strings.
+    boardDueHours: [
+      { value: '', label: 'End of day' },
+      ...[8, 9, 10, 11, 12, 13, 14, 15, 16].map(h => ({ value: String(h), label: formatBoardHour(h) })),
+    ],
+    boardPhotoTargetId: null as string | null,
+    // Copy modal. The draft always exists (never null) because the modal's inputs bind to its fields
+    // when the page loads, and Alpine's CSP build throws on a null path.
+    boardCopyOpen: false,
+    boardCopy: { itemId: '', description: '', to: 'tasks', assignee: '', dueDate: '', dueHour: '' },
+    boardToast: '',
+    boardNow: Date.now(), // ticks every minute so time-based buttons and options update on a screen left open
+    _boardClock: 0,
+    boardDelete: null as { kind: 'item' | 'photo'; id: string; label: string } | null,
+    boardForm: {
+      description: '',
+      showMore: false,
+      location: 'tasks',
+      section: 'General',
+      assignee: '',
+      dueDate: '',
+      dueHour: '',
+      photos: [] as Blob[],
+      photoUrls: [] as string[],
+    },
 
     // Computed
     get sortedUsers() {
@@ -150,7 +225,11 @@ export function createApp() {
 
     // Patrollers matching the search, those who have run checked today first (not everyone works every day), then alphabetical
     get filteredPatrollers() {
-      const search = this.patrollerSearch.toLowerCase();
+      return this.matchPatrollers(this.patrollerSearch);
+    },
+
+    matchPatrollers(text: string) {
+      const search = text.toLowerCase();
       const checkedToday = new Set(this.checks.map((c: any) => c.patroller.trim().toLowerCase()));
       return this.patrollers
         .filter(p => p.toLowerCase().includes(search))
@@ -259,7 +338,68 @@ export function createApp() {
 
     // The menu holds the less-used pages, so its button lights up while one of them is open
     get isMenuTabActive() {
-      return this.currentTab !== 'runs';
+      return this.currentTab !== 'runs' && this.currentTab !== 'board';
+    },
+
+    get canCreateBoardItem() {
+      return !this.isCreatingBoardItem && !!this.boardForm.description.trim();
+    },
+
+    // The morning brief and debrief that new items go to: today's until its hour has passed, then tomorrow's
+    get boardNextBriefDate() {
+      return this.currentBoardHour() < BRIEF_HOUR ? this.boardToday : addDays(this.boardToday, 1);
+    },
+
+    get boardNextDebriefDate() {
+      return this.currentBoardHour() < DEBRIEF_HOUR ? this.boardToday : addDays(this.boardToday, 1);
+    },
+
+    // Where items can be added, moved or copied to: Tasks, the next morning brief, and the next debrief
+    get boardTargets() {
+      const targets = [{ value: 'tasks', label: 'Tasks' }];
+      if (!this.boardToday) return targets;
+      for (const value of [`brief:${this.boardNextBriefDate}`, `debrief:${this.boardNextDebriefDate}`]) {
+        targets.push({ value, label: boardTargetLabel(value) });
+      }
+      return targets;
+    },
+
+    // Move to and Copy to leave out the item's own type: a debrief item isn't offered a debrief, and so on
+    boardTargetsFor(item: BoardItem) {
+      const kind = this.boardLocationKind(item);
+      return this.boardTargets.filter(target => target.value.split(':')[0] !== kind);
+    },
+
+    // Where the open edit panel's item will be once saved: the Move to choice, else where it is now
+    get boardEditLocation() {
+      return this.boardEdit.moveTo || this.boardEdit.current;
+    },
+
+    // Tasks first, then this morning's brief and tonight's debrief. Anything pinned to a later day stays out
+    // of sight until its day comes (a task still shows under Tasks).
+    get boardGroups() {
+      const byCreated = (a: BoardItem, b: BoardItem) => a.createdAt - b.createdAt;
+      const byDue = (a: BoardItem, b: BoardItem) =>
+        Number(!!a.doneAt) - Number(!!b.doneAt) ||
+        (a.dueDate || '9999-99-99').localeCompare(b.dueDate || '9999-99-99') ||
+        (a.dueHour ?? END_OF_DAY_HOUR) - (b.dueHour ?? END_OF_DAY_HOUR) ||
+        byCreated(a, b);
+
+      const brief = `brief:${this.boardToday}`;
+      const debrief = `debrief:${this.boardToday}`;
+      const groups = [
+        { key: 'tasks', title: 'Tasks', items: [] as BoardItem[], sort: byDue },
+        { key: 'brief', title: boardTargetLabel(brief), items: [] as BoardItem[], sort: byCreated },
+        { key: 'debrief', title: boardTargetLabel(debrief), items: [] as BoardItem[], sort: byCreated },
+      ];
+      for (const item of this.boardItems) {
+        const location = this.boardLocation(item);
+        if (location === brief) groups[1].items.push(item);
+        else if (location === debrief) groups[2].items.push(item);
+        else if (item.isTask) groups[0].items.push(item);
+      }
+      for (const group of groups) group.items.sort(group.sort);
+      return groups.filter(group => group.items.length > 0);
     },
 
     // Init
@@ -281,13 +421,14 @@ export function createApp() {
             // Failed to parse - not critical, will use default state
           }
         }
+        this.loadBoardDraft();
         this.showLoginErrorFromUrl();
         this.passkeySupported = browserSupportsWebAuthn();
         await this.checkAuth();
         if (this.user) {
           this.maybePromptForPasskey();
           await this.loadData();
-          connectSocket(this.handleNewCheck.bind(this), this.handleSocketReconnect.bind(this));
+          this.connectLiveUpdates();
           this.setupVisibilityListener();
         } else {
           await this.loadLoginProviders();
@@ -304,8 +445,9 @@ export function createApp() {
 
     async checkAuth() {
       try {
-        const { user } = await api.getMe();
+        const { user, features } = await api.getMe();
         this.user = user;
+        this.features = { board: !!features?.board };
       } catch (err: any) {
         if (err.status !== 401) {
           console.error('Auth check error:', err);
@@ -315,6 +457,7 @@ export function createApp() {
     },
 
     async loadData() {
+      this.loadBoard();
       try {
         const statusRes = await api.getRunStatus();
 
@@ -522,9 +665,9 @@ export function createApp() {
         await api.verifyPasskeyAuthentication(response);
 
         // The verify response only has id/name/email; /me also has isAdmin/isSuperuser
-        this.user = (await api.getMe()).user;
+        await this.checkAuth();
         await this.loadData();
-        connectSocket(this.handleNewCheck.bind(this), this.handleSocketReconnect.bind(this));
+        this.connectLiveUpdates();
         this.setupVisibilityListener();
       } catch (err: any) {
         // The user dismissing the prompt (or no passkey being available) is
@@ -546,9 +689,9 @@ export function createApp() {
         await api.verifyPasskeyAuthentication(response);
 
         // The verify response only has id/name/email; /me also has isAdmin/isSuperuser
-        this.user = (await api.getMe()).user;
+        await this.checkAuth();
         await this.loadData();
-        connectSocket(this.handleNewCheck.bind(this), this.handleSocketReconnect.bind(this));
+        this.connectLiveUpdates();
         this.setupVisibilityListener();
       } catch (err: any) {
         if (err?.name !== 'NotAllowedError') {
@@ -656,6 +799,9 @@ export function createApp() {
       if (tab !== 'runs') {
         this.runSearchQuery = '';
         this.handleRunSearch();
+      }
+      if (tab === 'board') {
+        this.loadBoard();
       }
       if (tab === 'account' && !this.user?.oidcOnly && this.passkeys.length === 0) {
         this.loadPasskeys();
@@ -961,6 +1107,474 @@ export function createApp() {
       } catch (err: any) {
         this.error = err.message || 'Failed to mark inactive';
       }
+    },
+
+    // Socket
+    connectLiveUpdates() {
+      if (!this._boardClock) {
+        this._boardClock = window.setInterval(() => {
+          this.boardNow = Date.now();
+        }, 60 * 1000);
+      }
+      connectSocket(
+        this.handleNewCheck.bind(this),
+        this.handleSocketReconnect.bind(this),
+        this.loadBoard.bind(this),
+      );
+    },
+
+    // Patrol board
+    async loadBoard() {
+      if (!this.features.board) return;
+      try {
+        const res = await api.getBoard();
+        this.boardItems = res.items;
+        this.boardSections = res.sections;
+        this.boardToday = res.today;
+      } catch (err) {
+        console.error('Failed to load board:', err);
+      }
+    },
+
+    // The unsent text survives a reload or a dead-signal failure until it's actually saved
+    loadBoardDraft() {
+      try {
+        this.boardForm.description = localStorage.getItem('boardDraft') || '';
+        this.collapsedBoardGroups = new Set(JSON.parse(localStorage.getItem('collapsedBoardGroups') || '[]'));
+      } catch (e) {
+        // Storage unavailable - not critical
+      }
+    },
+
+    saveBoardDraft() {
+      try {
+        if (this.boardForm.description) {
+          localStorage.setItem('boardDraft', this.boardForm.description);
+        } else {
+          localStorage.removeItem('boardDraft');
+        }
+      } catch (e) {
+        // Storage unavailable - not critical
+      }
+    },
+
+    toggleBoardGroup(key: string) {
+      if (this.collapsedBoardGroups.has(key)) {
+        this.collapsedBoardGroups.delete(key);
+      } else {
+        this.collapsedBoardGroups.add(key);
+      }
+      try {
+        localStorage.setItem('collapsedBoardGroups', JSON.stringify(Array.from(this.collapsedBoardGroups)));
+      } catch (e) {
+        // Storage unavailable - not critical
+      }
+    },
+
+    isBoardGroupCollapsed(key: string) {
+      return this.collapsedBoardGroups.has(key);
+    },
+
+    toggleBoardMore() {
+      this.boardForm.showMore = !this.boardForm.showMore;
+    },
+
+    // Assignee picker: the same searchable patroller list as run checks, for the create form and the edit panel
+    boardAssigneeText(which: BoardPicker) {
+      if (which === 'form') return this.boardForm.assignee;
+      if (which === 'edit') return this.boardEdit.assignee;
+      return this.boardCopy.assignee;
+    },
+
+    setBoardAssignee(which: BoardPicker, name: string) {
+      if (which === 'form') this.boardForm.assignee = name;
+      else if (which === 'edit') this.boardEdit.assignee = name;
+      else this.boardCopy.assignee = name;
+      this.boardAssigneeOpen = '';
+    },
+
+    boardAssigneeMatches(which: BoardPicker) {
+      return this.matchPatrollers(this.boardAssigneeText(which));
+    },
+
+    openBoardAssignee(which: BoardPicker) {
+      this.boardAssigneeOpen = which;
+    },
+
+    closeBoardAssignee() {
+      this.boardAssigneeOpen = '';
+    },
+
+    pickBoardAssignee(which: BoardPicker, name: string) {
+      this.setBoardAssignee(which, name);
+    },
+
+    clearBoardAssignee(which: BoardPicker) {
+      this.setBoardAssignee(which, '');
+    },
+
+    assignBoardToMe(which: BoardPicker) {
+      this.setBoardAssignee(which, this.user.name);
+    },
+
+    async addBoardFormPhotos(event: Event) {
+      const input = event.target as HTMLInputElement;
+      const files = Array.from(input.files || []);
+      input.value = ''; // Allow picking the same photo again
+      for (const file of files) {
+        if (this.boardForm.photos.length >= 3) {
+          this.boardError = 'At most 3 photos per item';
+          break;
+        }
+        try {
+          const blob = await resizeImageToJpeg(file);
+          this.boardForm.photos.push(blob);
+          this.boardForm.photoUrls.push(URL.createObjectURL(blob));
+        } catch (err: any) {
+          this.boardError = err.message || 'Could not read that photo';
+        }
+      }
+    },
+
+    removeBoardFormPhoto(url: string) {
+      const index = this.boardForm.photoUrls.indexOf(url);
+      if (index < 0) return;
+      URL.revokeObjectURL(url);
+      this.boardForm.photoUrls.splice(index, 1);
+      this.boardForm.photos.splice(index, 1);
+    },
+
+    resetBoardForm() {
+      for (const url of this.boardForm.photoUrls) URL.revokeObjectURL(url);
+      this.boardForm.description = '';
+      this.boardForm.showMore = false;
+      this.boardForm.location = 'tasks';
+      this.boardForm.section = 'General';
+      this.boardForm.assignee = '';
+      this.boardForm.dueDate = '';
+      this.boardForm.dueHour = '';
+      this.boardForm.photos = [];
+      this.boardForm.photoUrls = [];
+      this.saveBoardDraft();
+    },
+
+    async createBoardItem() {
+      const form = this.boardForm;
+      const description = form.description.trim();
+      if (!description || this.isCreatingBoardItem) return;
+
+      const payload: BoardItemInput = {
+        description,
+        section: form.section,
+      };
+      if (form.location === 'tasks') {
+        payload.isTask = true;
+        if (form.assignee.trim()) payload.assignee = form.assignee.trim();
+        if (form.dueDate) payload.dueDate = form.dueDate;
+        if (form.dueHour) payload.dueHour = Number(form.dueHour);
+      } else {
+        Object.assign(payload, this.boardLocationChanges(form.location));
+      }
+
+      this.isCreatingBoardItem = true;
+      this.boardError = null;
+      try {
+        const { item } = await api.createBoardItem(payload);
+        const photos = form.photos;
+        this.resetBoardForm();
+
+        let failedPhotos = 0;
+        for (const photo of photos) {
+          try {
+            await api.uploadBoardPhoto(item.id, photo);
+          } catch (err) {
+            failedPhotos++;
+          }
+        }
+        await this.loadBoard();
+        if (failedPhotos > 0) {
+          this.showMessage('warning', `Saved, but ${failedPhotos} photo(s) did not upload. Add them from the item.`);
+        }
+      } catch (err: any) {
+        this.boardError = err instanceof ApiError
+          ? err.message
+          : "Couldn't reach the server. Your text is kept on this device - tap Create to try again.";
+      } finally {
+        this.isCreatingBoardItem = false;
+      }
+    },
+
+    async updateBoardItem(item: BoardItem, data: BoardItemInput) {
+      try {
+        this.boardError = null;
+        const res = await api.updateBoardItem(item.id, data);
+        this.boardItems = this.boardItems.map(existing => existing.id === item.id ? res.item : existing);
+        return true;
+      } catch (err: any) {
+        this.boardError = err.message || 'Could not update that item';
+        this.loadBoard();
+        return false;
+      }
+    },
+
+    // Due date and assignee only show for items in the Tasks list; in Debrief or Morning brief it's a note
+    showBoardTaskInfo(item: BoardItem) {
+      return item.isTask && this.boardLocation(item) === 'tasks';
+    },
+
+    boardHasBadges(item: BoardItem) {
+      return item.section !== 'General' || this.showBoardTaskInfo(item) || !!item.doneAt;
+    },
+
+    // The target an item shows under: today's morning brief or debrief if it's pinned to one (the brief
+    // comes first), otherwise 'tasks'. Pins for later days don't count until that day.
+    boardLocation(item: BoardItem): string {
+      if (item.morningBriefDate === this.boardToday) return 'brief:' + this.boardToday;
+      if (item.debriefDate === this.boardToday) return 'debrief:' + this.boardToday;
+      return 'tasks';
+    },
+
+    boardLocationKind(item: BoardItem): 'tasks' | 'brief' | 'debrief' {
+      return this.boardLocation(item).split(':')[0] as 'tasks' | 'brief' | 'debrief';
+    },
+
+    // Moving is exclusive: it pins the item for one meeting (or none, for Tasks) and unpins the other
+    boardLocationChanges(target: string): BoardItemInput {
+      if (target === 'tasks') return { isTask: true, debriefDate: null, morningBriefDate: null };
+      const [kind, date] = target.split(':');
+      return kind === 'brief'
+        ? { morningBriefDate: date, debriefDate: null }
+        : { debriefDate: date, morningBriefDate: null };
+    },
+
+    // A debrief card's one-tap copy goes to the brief after that debrief (its day + 1), and only appears late in
+    // the day. The label runs for every card (x-show only hides the button), so it must cope with non-debrief cards.
+    boardCopyBriefDate(item: BoardItem) {
+      const date = this.boardLocation(item).split(':')[1];
+      return date ? addDays(date, 1) : '';
+    },
+
+    get boardCopyBriefReady() {
+      return this.currentBoardHour() >= COPY_TO_BRIEF_HOUR;
+    },
+
+    boardCopyBriefLabel(item: BoardItem) {
+      const date = this.boardCopyBriefDate(item);
+      if (!date) return '';
+      const [, month, day] = date.split('-').map(Number);
+      return `Copy to ${month}/${day} Brief`;
+    },
+
+    copyToNextBoardBrief(item: BoardItem) {
+      const date = this.boardCopyBriefDate(item);
+      if (date) this.askCopyBoardItem(item, 'brief:' + date);
+    },
+
+    takeBoardTask(item: BoardItem) {
+      return this.updateBoardItem(item, { assignee: this.user.name });
+    },
+
+    toggleBoardDone(item: BoardItem) {
+      return this.updateBoardItem(item, { done: !item.doneAt });
+    },
+
+    toggleBoardExpanded(item: BoardItem) {
+      if (this.boardExpandedId === item.id) {
+        this.boardExpandedId = null;
+        return;
+      }
+      this.boardExpandedId = item.id;
+      this.boardEdit = {
+        current: this.boardLocation(item),
+        moveTo: '',
+        assignee: item.assignee || '',
+        dueDate: item.dueDate || '',
+        dueHour: item.dueHour == null ? '' : String(item.dueHour),
+      };
+    },
+
+    isBoardExpanded(item: BoardItem) {
+      return this.boardExpandedId === item.id;
+    },
+
+    async saveBoardEdit(item: BoardItem) {
+      const edit = this.boardEdit;
+      const data: BoardItemInput = {};
+      // Assignee and due date only apply in Tasks; elsewhere the fields are hidden and the stored values are kept
+      if (this.boardEditLocation === 'tasks') {
+        data.assignee = edit.assignee.trim() || null;
+        // A blank date on an item that never had one is left alone, so the server can default a new task to today
+        if (edit.dueDate || item.dueDate) {
+          data.dueDate = edit.dueDate || null;
+          data.dueHour = edit.dueDate && edit.dueHour ? Number(edit.dueHour) : null;
+        }
+      }
+      if (edit.moveTo) Object.assign(data, this.boardLocationChanges(edit.moveTo));
+      if (await this.updateBoardItem(item, data)) this.boardExpandedId = null;
+    },
+
+    cancelBoardEdit() {
+      this.boardExpandedId = null;
+    },
+
+    // Copying makes a new item and leaves the original alone; it always asks first, in a modal
+    askCopyBoardItem(item: BoardItem, to: string) {
+      this.boardAssigneeOpen = '';
+      this.boardCopy = { itemId: item.id, description: item.description, to, assignee: '', dueDate: '', dueHour: '' };
+      this.boardCopyOpen = true;
+    },
+
+    // The edit panel's "Copy to" dropdown: open the modal, then reset the dropdown for next time
+    askCopyFromPanel(item: BoardItem, event: Event) {
+      const select = event.target as HTMLSelectElement;
+      const to = select.value;
+      select.value = '';
+      if (to) this.askCopyBoardItem(item, to);
+    },
+
+    cancelBoardCopy() {
+      this.boardCopyOpen = false;
+      this.boardAssigneeOpen = '';
+    },
+
+    get boardCopyTitle() {
+      return 'Copy to ' + boardTargetLabel(this.boardCopy.to);
+    },
+
+    get boardCopyIsTask() {
+      return this.boardCopy.to === 'tasks';
+    },
+
+    async confirmBoardCopy() {
+      const copy = { ...this.boardCopy };
+      const [kind, date] = copy.to.split(':');
+      const data: Parameters<typeof api.copyBoardItem>[1] = copy.to === 'tasks'
+        ? { to: 'tasks' }
+        : { to: kind as 'brief' | 'debrief', date };
+      if (copy.to === 'tasks') {
+        if (copy.assignee.trim()) data.assignee = copy.assignee.trim();
+        if (copy.dueDate) {
+          data.dueDate = copy.dueDate;
+          if (copy.dueHour) data.dueHour = Number(copy.dueHour);
+        }
+      }
+      this.boardCopyOpen = false;
+      try {
+        this.boardError = null;
+        await api.copyBoardItem(copy.itemId, data);
+        await this.loadBoard();
+        this.showBoardToast('Copied to ' + boardTargetLabel(copy.to));
+      } catch (err: any) {
+        this.boardError = err.message || 'Could not copy that';
+      }
+    },
+
+    showBoardToast(text: string) {
+      this.boardToast = text;
+      setTimeout(() => {
+        if (this.boardToast === text) this.boardToast = '';
+      }, 2500);
+    },
+
+    // Deleting asks first, in a modal rather than a browser alert
+    askDeleteBoardItem(item: BoardItem) {
+      this.boardDelete = { kind: 'item', id: item.id, label: item.description };
+    },
+
+    askDeleteBoardPhoto(photoId: string) {
+      this.boardDelete = { kind: 'photo', id: photoId, label: '' };
+    },
+
+    cancelBoardDelete() {
+      this.boardDelete = null;
+    },
+
+    get boardDeleteTitle() {
+      return this.boardDelete?.kind === 'photo' ? 'Delete this photo?' : 'Delete this item?';
+    },
+
+    async confirmBoardDelete() {
+      const target = this.boardDelete;
+      if (!target) return;
+      this.boardDelete = null;
+      try {
+        this.boardError = null;
+        if (target.kind === 'item') {
+          await api.deleteBoardItem(target.id);
+          this.boardItems = this.boardItems.filter(existing => existing.id !== target.id);
+        } else {
+          await api.deleteBoardPhoto(target.id);
+          await this.loadBoard();
+        }
+      } catch (err: any) {
+        this.boardError = err.message || 'Could not delete that';
+      }
+    },
+
+    pickBoardPhoto(item: BoardItem) {
+      this.boardPhotoTargetId = item.id;
+      document.getElementById('board-card-photo')?.click();
+    },
+
+    async uploadBoardCardPhoto(event: Event) {
+      const input = event.target as HTMLInputElement;
+      const file = input.files?.[0];
+      input.value = '';
+      const itemId = this.boardPhotoTargetId;
+      if (!file || !itemId) return;
+      try {
+        this.boardError = null;
+        await api.uploadBoardPhoto(itemId, await resizeImageToJpeg(file));
+        await this.loadBoard();
+      } catch (err: any) {
+        this.boardError = err.message || 'Could not upload that photo';
+      }
+    },
+
+    // Board display helpers
+    canDeleteBoardItem(item: BoardItem) {
+      return item.authorId === this.user.id || !!this.user.isAdmin;
+    },
+
+    // Past its due day, or today and past its due hour (end of day never goes overdue until tomorrow)
+    isBoardOverdue(item: BoardItem) {
+      if (!item.isTask || item.doneAt || !item.dueDate) return false;
+      if (item.dueDate !== this.boardToday) return item.dueDate < this.boardToday;
+      if (item.dueHour == null) return false;
+      return this.currentBoardHour() >= item.dueHour;
+    },
+
+    // Hour of the day (0-23) in the configured timezone
+    currentBoardHour() {
+      return parseInt(new Date(this.boardNow).toLocaleTimeString('en-US', {
+        hour: '2-digit', hour12: false, timeZone: this.timezone,
+      }), 10) % 24;
+    },
+
+    formatBoardDate(date: string) {
+      const [year, month, day] = date.split('-').map(Number);
+      return new Date(year, month - 1, day).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    },
+
+    boardDueLabel(item: BoardItem) {
+      if (!item.dueDate) return '';
+      const day = item.dueDate === this.boardToday ? 'today' : this.formatBoardDate(item.dueDate);
+      const time = item.dueHour == null ? '' : ' ' + formatBoardHour(item.dueHour);
+      return (this.isBoardOverdue(item) ? 'Overdue · ' : 'Due ') + day + time;
+    },
+
+    boardItemMeta(item: BoardItem) {
+      const created = new Date(item.createdAt * 1000);
+      let text = item.authorName + ' · ' + created.toLocaleTimeString([], {
+        hour: 'numeric', minute: '2-digit', timeZone: this.timezone,
+      });
+      const day = created.toLocaleDateString('en-CA', { timeZone: this.timezone });
+      if (day !== this.boardToday) text += ' · ' + this.formatBoardDate(day);
+      return text;
+    },
+
+    boardPhotoUrl(photoId: string) {
+      return '/api/board/photos/' + photoId;
     },
 
     // Socket

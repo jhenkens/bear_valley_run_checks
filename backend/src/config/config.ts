@@ -23,6 +23,10 @@ export interface OidcConfig {
   requireVerifiedEmail: boolean;
 }
 
+export interface BoardConfig {
+  enabled: boolean;
+}
+
 export interface AppConfig {
   runProvider: 'config' | 'sheets';
   runs: Run[];
@@ -41,6 +45,7 @@ export interface AppConfig {
   appUrl: string;
   port: number;
   oidc: OidcConfig;
+  board: BoardConfig;
 }
 
 function loadConfig(): AppConfig {
@@ -75,6 +80,7 @@ function loadConfig(): AppConfig {
     appUrl: config.get<string>('appUrl'),
     port: config.get<number>('port'),
     oidc: config.get<OidcConfig>('oidc'),
+    board: config.get<BoardConfig>('board'),
   };
 }
 

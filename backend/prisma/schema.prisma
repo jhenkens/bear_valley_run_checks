@@ -93,3 +93,44 @@ model GoogleOAuth {
 
   @@index([userId])
 }
+
+// Patrol Board: notes pinned for debrief / morning brief, and lightweight tasks.
+// Dates are yyyy-MM-dd strings in the configured timezone (calendar days, not instants).
+model BoardItem {
+  id               String    @id @default(cuid())
+  description      String
+  section          String    @default("General")
+  authorName       String
+  authorId         String?   // Plain reference (no relation) so deleting a user keeps their items
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  isTask           Boolean   @default(false)
+  dueDate          String?
+  dueHour          Int?      // 8-16 (hour of day, configured timezone); null = end of day (5 PM)
+  assignee         String?   // Patroller name (same list as run checks)
+  doneAt           DateTime?
+  doneBy           String?
+
+  debriefDate      String?   // Pinned for that day's debrief
+  morningBriefDate String?   // Shown in that day's morning brief
+
+  archivedAt       DateTime?
+  archivedToSheet  Boolean   @default(false)
+
+  photos           BoardPhoto[]
+
+  @@index([archivedAt])
+}
+
+model BoardPhoto {
+  id           String    @id @default(cuid())
+  itemId       String
+  item         BoardItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  uploadedBy   String
+  createdAt    DateTime  @default(now())
+  driveFileId  String?
+  driveUrl     String?
+
+  @@index([itemId])
+}

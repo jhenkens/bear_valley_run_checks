@@ -309,7 +309,7 @@ router.post('/logout', (req, res) => {
 
 // GET /auth/me - Get current user
 router.get('/me', requireAuth, async (req: AuthRequest, res) => {
-  res.json({ user: req.user });
+  res.json({ user: req.user, features: { board: appConfig.board.enabled } });
 });
 
 export default router;

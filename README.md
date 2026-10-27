@@ -255,6 +255,30 @@ Setup:
    - `GOOGLE_SERVICE_ACCOUNT_EMAIL`: Service account email
    - `GOOGLE_PRIVATE_KEY`: Private key from service account credentials
 
+## Patrol Board (optional)
+
+A lightweight board for things patrollers bring up during the day. Off by default; set `BOARD_ENABLED=true` (or `board.enabled: true` in a config file) to show the **Board** tab. It is on in development.
+
+- **Create** takes just text and makes a task due end of day today. **More** adds: where it goes (**Add to**: Tasks, the next morning brief, or the next debrief), section, assignee, due date and time, and up to 3 photos. Adding to a brief or debrief makes a plain note. Unsent text is kept on the device if a send fails.
+- **Lists:** The board shows Tasks, then today's morning brief and today's debrief, titled with their dates (e.g. "Mon 10/26 Morning brief"). A due date of today means "ASAP"; an optional due time (8 AM to 4 PM, hourly) defaults to end of day, and a task goes overdue once its hour passes. Due dates and assignees only show on tasks.
+- **Next meetings:** Add to, Move to and Copy to offer just Tasks, the next morning brief and the next debrief, each with its date. Before 9 AM the next brief is today's, after that tomorrow's; before 5 PM the next debrief is today's, after that tomorrow's. Items pinned for a later day stay out of sight until that day (tasks still show under Tasks). The cutoffs are `BRIEF_HOUR` and `DEBRIEF_HOUR` in `frontend/src/app.ts`.
+- **Cards:** Tasks have Take it and Done. Morning brief cards have **Copy to Task**. Debrief cards have no buttons until 4 PM (`COPY_TO_BRIEF_HOUR`), then **Copy to {next morning} Brief**. Everything else is in the ⋯ panel: **Move to** and **Copy to** (each leaves out the item's own type), assignee, due date and time, Attach photo and Delete. Move to, assignee and due date apply only when you tap Save.
+- **Copy** makes a new item and leaves the original alone (photos come along). Every copy asks first in a modal; copying to Tasks lets you set an assignee and due date.
+- Items leave the board once they're no longer pinned or open (a done task stays until the end of the day). With `runProvider: sheets`, they're then appended to a `<season> Patrol Board` spreadsheet (one `Archive` tab) in the configured Drive folder, with photos copied to a `<season> Patrol Board Photos` folder. Browse old items there with Sheets' own filters. Without the Sheets provider there is no archive, but items stay in the database.
+- **Audit log:** every change (create, edit, copy, delete, photo upload/delete, archive, and denied delete attempts) is appended as one JSON line to `data/board-audit/board-audit-YYYY-MM.log`, with time, who (name, email), IP, and before/after values for edits. Deleted and archived items are logged with a full snapshot. Reads aren't logged. Example: `grep item.delete data/board-audit/*.log | jq .item`.
+- Photos are downsized on the phone, stored under `data/board-photos/` while active, and only served to signed-in users.
+
+### Trying it locally (no Google)
+
+```bash
+cd backend
+npm run seed:board            # sample notes, brief items and tasks around today (dev only)
+npm run seed:board -- --sweep # also run the archive sweep immediately
+npm run dev                   # then log in as admin@bearvalley.com
+```
+
+Seeding replaces the board contents. The development config uses the `config` run provider, so the archive step is skipped and nothing touches Google.
+
 ## User Management
 
 ### Superusers

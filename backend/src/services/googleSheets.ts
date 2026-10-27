@@ -48,7 +48,7 @@ export function getTodaySheetName(): string {
  * season starting that year; dates January-June belong to the season that
  * started the previous July.
  */
-function getSeasonStartYear(): number {
+export function getSeasonStartYear(): number {
   const yearMonth = formatInTimeZone(new Date(), appConfig.timezone, 'yyyy-MM');
   const [yearStr, monthStr] = yearMonth.split('-');
   const year = parseInt(yearStr, 10);
@@ -93,7 +93,7 @@ function getLastWeekdayOfMonth(year: number, month: number, weekday: number): Da
  * Shift a "yyyy-MM-dd" calendar-date string by a number of days (may be
  * negative), staying purely in calendar-date terms.
  */
-function addDaysToDateString(dateString: string, days: number): string {
+export function addDaysToDateString(dateString: string, days: number): string {
   const [year, month, day] = dateString.split('-').map(Number);
   return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
 }
@@ -123,7 +123,7 @@ function isWithinDailyTabWindow(): boolean {
  * Format a date to a string in the configured timezone
  * Returns format: YYYY-MM-DD HH:mm:ss zzz (e.g., 2026-01-20 14:30:00 PST)
  */
-function formatDateInTimezone(date: Date): string {
+export function formatDateInTimezone(date: Date): string {
   return formatInTimeZone(date, appConfig.timezone, 'yyyy-MM-dd HH:mm:ss zzz');
 }
 

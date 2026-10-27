@@ -11,6 +11,7 @@ import { initialize as initializeRunCheckCache } from './services/runCheckCache'
 import { initializeGoogleSheets } from './services/googleSheets';
 import { startOAuthValidationScheduler } from './services/googleOAuth';
 import { syncSuperusers } from './services/superuserService';
+import { startBoardScheduler } from './services/boardService';
 import { logger } from './utils/logger';
 
 // Import routes
@@ -19,6 +20,7 @@ import passkeyRoutes from './routes/passkeys';
 import runcheckRoutes from './routes/runchecks';
 import userRoutes from './routes/users';
 import googleRoutes from './routes/google';
+import boardRoutes from './routes/board';
 
 const app = express();
 const server = http.createServer(app);
@@ -83,6 +85,9 @@ app.use('/auth/passkey', passkeyRoutes);
 app.use('/api', runcheckRoutes);
 app.use('/api', userRoutes);
 app.use('/api/google', googleRoutes);
+if (appConfig.board.enabled) {
+  app.use('/api/board', boardRoutes);
+}
 
 // Serve static files from frontend in production
 if (process.env.NODE_ENV === 'production') {
@@ -129,7 +134,10 @@ async function startServer() {
       startOAuthValidationScheduler();
     }
 
-    // Start 
+    if (appConfig.board.enabled) {
+      startBoardScheduler();
+    }
+
     // Start server
     const port = appConfig.port;
     server.listen(port, () => {

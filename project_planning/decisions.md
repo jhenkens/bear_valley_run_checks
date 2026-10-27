@@ -63,6 +63,19 @@
 
 ---
 
+### Patrol Board
+
+**One capture box, triage later**
+- **Why:** Patrollers capture items from chairlifts and cramped shacks on phones; choosing "task or note" up front is friction at the worst moment.
+- **Implementation:** A single `BoardItem` model. Create takes only text and makes a task due today (end of day); "More" adds debrief and morning-brief pins, section, assignee, due date/time and photos. Plain notes are opt-in. "Due immediately" is just due today.
+- **Lifecycle:** Active while pinned for today's debrief, queued for a morning brief, or an open task (done tasks stay until end of day). An hourly sweep archives the rest.
+- **Archive:** Google Sheet (`<season> Patrol Board`, one `Archive` tab) plus a Drive photo folder, only with the Sheets provider. Chosen so no archive-viewing UI is needed. Rows are frozen once written.
+- **Photos:** Resized to JPEG on the device, stored on the data volume, served only to signed-in users, copied to Drive when the item archives.
+- **Dated pins:** `debriefDate` / `morningBriefDate` are explicit days (today up to a week ahead), not booleans. The UI keeps it simple: only the next brief and next debrief are offered (cutoffs 9 AM and 5 PM), the board shows only today's two meetings, and later pins stay hidden until their day. Groups and targets are labeled with dates.
+- **Copy vs move:** Items are independent rows, so "Copy to" creates a new `BoardItem` (and copies its photo files); "Move to" only changes the pin/task flags. Copies always confirm in a modal.
+- **Audit log:** Append-only JSON lines on the data volume, one file per month, written by `boardAudit.ts` from every board route and the archive sweep. A logging failure never fails the change.
+- **Enabled by:** `board.enabled` / `BOARD_ENABLED` (restart required).
+
 ### UI/UX Decisions
 
 **Color Coding: Red/Yellow/Green Bucketing**

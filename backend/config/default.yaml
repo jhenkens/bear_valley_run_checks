@@ -17,6 +17,10 @@ oidc:
   requireVerifiedEmail: true
 
 # Superusers (always have admin access, cannot be demoted or deleted)
+# Patrol Board: lightweight tasks plus debrief / morning-brief notes. Off by default.
+board:
+  enabled: false
+
 superusers:
   - email: admin@bearvalley.com
     name: Admin User
