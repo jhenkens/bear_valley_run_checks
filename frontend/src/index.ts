@@ -378,9 +378,7 @@ if (appRoot) {
                   <div class="board-photos" x-show="item.photos.length > 0">
                     <template x-for="photoId in item.photos" :key="photoId">
                       <div class="board-photo">
-                        <a :href="boardPhotoUrl(photoId)" target="_blank" rel="noopener">
-                          <img :src="boardPhotoUrl(photoId)" loading="lazy" alt="Photo">
-                        </a>
+                        <img :src="boardPhotoUrl(photoId)" loading="lazy" alt="Photo" class="board-photo-img" @click="openBoardPhoto(photoId)">
                         <button type="button" class="photo-del" x-show="isBoardExpanded(item)" @click="askDeleteBoardPhoto(photoId)" aria-label="Delete photo">✕</button>
                       </div>
                     </template>
@@ -410,6 +408,14 @@ if (appRoot) {
                         <option value="">Choose...</option>
                         <template x-for="t in boardTargetsFor(item)" :key="t.value">
                           <option :value="t.value" x-text="t.label"></option>
+                        </template>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label>Section</label>
+                      <select x-model="boardEdit.section">
+                        <template x-for="s in boardSectionsFor(item)" :key="s">
+                          <option :value="s" x-text="s"></option>
                         </template>
                       </select>
                     </div>
@@ -450,6 +456,7 @@ if (appRoot) {
                       <button class="board-btn" @click="cancelBoardEdit">Cancel</button>
                       <button class="board-btn board-danger" x-show="canDeleteBoardItem(item)" @click="askDeleteBoardItem(item)">Delete</button>
                     </div>
+                    <button class="board-btn board-btn-block" x-show="user && user.isAdmin" @click="askArchiveBoardItem(item)">Archive now (admin)</button>
                   </div>
                 </div>
               </template>
@@ -700,15 +707,23 @@ if (appRoot) {
 
         <div class="toast" x-show="boardToast" x-text="boardToast"></div>
 
+        <!-- Photo viewer: tap anywhere to close -->
+        <div class="photo-viewer" x-show="boardPhotoView" @click="closeBoardPhoto" @keydown.escape.window="closeBoardPhoto">
+          <template x-if="boardPhotoView">
+            <img :src="boardPhotoUrl(boardPhotoView)" alt="Photo">
+          </template>
+          <button type="button" class="photo-viewer-close" @click.stop="closeBoardPhoto" aria-label="Close photo">✕</button>
+        </div>
+
         <!-- Delete confirmation -->
         <div class="modal-backdrop" x-show="boardDelete" @click.self="cancelBoardDelete" @keydown.escape.window="cancelBoardDelete">
           <div class="modal" role="dialog" aria-modal="true" aria-labelledby="board-delete-title">
             <h3 id="board-delete-title" x-text="boardDeleteTitle"></h3>
             <p class="modal-quote" x-show="boardDelete && boardDelete.label" x-text="boardDelete ? boardDelete.label : ''"></p>
-            <p class="modal-note">This can't be undone.</p>
+            <p class="modal-note" x-text="boardDeleteNote"></p>
             <div class="modal-actions">
               <button class="board-btn" @click="cancelBoardDelete">Cancel</button>
-              <button class="board-btn board-btn-danger" @click="confirmBoardDelete">Delete</button>
+              <button class="board-btn" :class="boardDelete && boardDelete.kind === 'archive' ? 'on' : 'board-btn-danger'" @click="confirmBoardDelete" x-text="boardDeleteConfirmLabel"></button>
             </div>
           </div>
         </div>

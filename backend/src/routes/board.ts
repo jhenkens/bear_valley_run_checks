@@ -13,6 +13,7 @@ import {
   photoPath,
   deletePhotoFiles,
   copyItem,
+  archiveItemNow,
   CopyTarget,
 } from '../services/boardService';
 import { auditBoard, auditSnapshot, auditDiff } from '../services/boardAudit';
@@ -234,6 +235,24 @@ router.post('/:id/copy', async (req: AuthRequest, res) => {
     res.status(201).json({ item: toApiItem(copy) });
   } catch (error) {
     logger.error('Error copying board item:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/board/:id/archive - Admin only: archive now and write to the sheet (to test the Google Drive connection)
+router.post('/:id/archive', async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params as { id: string };
+    if (!req.user!.isAdmin) return res.status(403).json({ error: 'Admin access required' });
+
+    const result = await archiveItemNow(id);
+    if (!result) return res.status(404).json({ error: 'Item not found' });
+
+    auditBoard(req, 'item.archive.manual', { itemId: id, ...result });
+    notifyChanged(req);
+    res.json(result);
+  } catch (error) {
+    logger.error('Error archiving board item:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

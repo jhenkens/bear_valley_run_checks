@@ -235,6 +235,12 @@ export const api = {
     });
   },
 
+  async archiveBoardItem(id: string) {
+    return fetchJSON<{ sheets: boolean; written: boolean; error: string | null }>(`${API_BASE}/board/${id}/archive`, {
+      method: 'POST',
+    });
+  },
+
   async deleteBoardItem(id: string) {
     return fetchJSON<{ message: string }>(`${API_BASE}/board/${id}`, { method: 'DELETE' });
   },

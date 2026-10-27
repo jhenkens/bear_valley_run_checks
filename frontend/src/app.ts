@@ -109,7 +109,7 @@ export function createApp() {
     collapsedBoardGroups: new Set<string>(),
     boardExpandedId: null as string | null,
     // Draft of the open edit panel; nothing reaches the server until Save
-    boardEdit: { current: 'tasks', moveTo: '', assignee: '', dueDate: '', dueHour: '' },
+    boardEdit: { current: 'tasks', moveTo: '', section: 'General', assignee: '', dueDate: '', dueHour: '' },
     // 8 AM to 4 PM in hour steps; blank = end of day. Values are strings because <select> binds strings.
     boardDueHours: [
       { value: '', label: 'End of day' },
@@ -123,7 +123,9 @@ export function createApp() {
     boardToast: '',
     boardNow: Date.now(), // ticks every minute so time-based buttons and options update on a screen left open
     _boardClock: 0,
-    boardDelete: null as { kind: 'item' | 'photo'; id: string; label: string } | null,
+    boardPhotoView: '', // id of the photo open in the full-screen viewer
+    // What the delete / archive confirmation modal is about; null while it's closed
+    boardDelete: null as { kind: 'item' | 'photo' | 'archive'; id: string; label: string } | null,
     boardForm: {
       description: '',
       showMore: false,
@@ -368,6 +370,11 @@ export function createApp() {
     boardTargetsFor(item: BoardItem) {
       const kind = this.boardLocationKind(item);
       return this.boardTargets.filter(target => target.value.split(':')[0] !== kind);
+    },
+
+    // The section choices, always including the item's own (a run may since have left the config)
+    boardSectionsFor(item: BoardItem) {
+      return this.boardSections.includes(item.section) ? this.boardSections : [...this.boardSections, item.section];
     },
 
     // Where the open edit panel's item will be once saved: the Move to choice, else where it is now
@@ -1387,6 +1394,7 @@ export function createApp() {
       this.boardEdit = {
         current: this.boardLocation(item),
         moveTo: '',
+        section: item.section,
         assignee: item.assignee || '',
         dueDate: item.dueDate || '',
         dueHour: item.dueHour == null ? '' : String(item.dueHour),
@@ -1400,6 +1408,7 @@ export function createApp() {
     async saveBoardEdit(item: BoardItem) {
       const edit = this.boardEdit;
       const data: BoardItemInput = {};
+      if (edit.section !== item.section) data.section = edit.section;
       // Assignee and due date only apply in Tasks; elsewhere the fields are hidden and the stored values are kept
       if (this.boardEditLocation === 'tasks') {
         data.assignee = edit.assignee.trim() || null;
@@ -1469,11 +1478,11 @@ export function createApp() {
       }
     },
 
-    showBoardToast(text: string) {
+    showBoardToast(text: string, ms = 2500) {
       this.boardToast = text;
       setTimeout(() => {
         if (this.boardToast === text) this.boardToast = '';
-      }, 2500);
+      }, ms);
     },
 
     // Deleting asks first, in a modal rather than a browser alert
@@ -1485,12 +1494,28 @@ export function createApp() {
       this.boardDelete = { kind: 'photo', id: photoId, label: '' };
     },
 
+    // Admin-only: archive one item now and write it to the sheet, to check the Google Drive connection
+    askArchiveBoardItem(item: BoardItem) {
+      this.boardDelete = { kind: 'archive', id: item.id, label: item.description };
+    },
+
     cancelBoardDelete() {
       this.boardDelete = null;
     },
 
     get boardDeleteTitle() {
-      return this.boardDelete?.kind === 'photo' ? 'Delete this photo?' : 'Delete this item?';
+      const kind = this.boardDelete?.kind;
+      return kind === 'photo' ? 'Delete this photo?' : kind === 'archive' ? 'Archive this item now?' : 'Delete this item?';
+    },
+
+    get boardDeleteNote() {
+      return this.boardDelete?.kind === 'archive'
+        ? 'It leaves the board and is written to the Google Sheet, if one is connected.'
+        : "This can't be undone.";
+    },
+
+    get boardDeleteConfirmLabel() {
+      return this.boardDelete?.kind === 'archive' ? 'Archive' : 'Delete';
     },
 
     async confirmBoardDelete() {
@@ -1499,7 +1524,17 @@ export function createApp() {
       this.boardDelete = null;
       try {
         this.boardError = null;
-        if (target.kind === 'item') {
+        if (target.kind === 'archive') {
+          const result = await api.archiveBoardItem(target.id);
+          await this.loadBoard();
+          if (result.written) {
+            this.showBoardToast('Archived and written to the Google Sheet');
+          } else if (result.sheets) {
+            this.showBoardToast(`Archived, but the Google Sheet write failed: ${(result.error || 'unknown error').slice(0, 160)}`, 10000);
+          } else {
+            this.showBoardToast("Archived. Google Sheets isn't enabled here, so nothing was written.", 6000);
+          }
+        } else if (target.kind === 'item') {
           await api.deleteBoardItem(target.id);
           this.boardItems = this.boardItems.filter(existing => existing.id !== target.id);
         } else {
@@ -1571,6 +1606,15 @@ export function createApp() {
       const day = created.toLocaleDateString('en-CA', { timeZone: this.timezone });
       if (day !== this.boardToday) text += ' · ' + this.formatBoardDate(day);
       return text;
+    },
+
+    // Photos open in an overlay on the board (not a new browser tab, which is a pain to close on a phone)
+    openBoardPhoto(photoId: string) {
+      this.boardPhotoView = photoId;
+    },
+
+    closeBoardPhoto() {
+      this.boardPhotoView = '';
     },
 
     boardPhotoUrl(photoId: string) {

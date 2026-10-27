@@ -149,6 +149,7 @@ export async function deletePhotoFiles(itemId: string): Promise<void> {
 // --- Archiving ---------------------------------------------------------------------------------
 
 let sweeping = false;
+let lastArchiveError: string | null = null; // why the most recent write to the sheet failed, for the manual archive's feedback
 
 /**
  * Mark inactive items archived, then copy any archived-but-unwritten items (and their photos) to
@@ -203,15 +204,35 @@ export async function archiveInactive(): Promise<void> {
         await appendArchiveRow(item, photoUrls);
         await prisma.boardItem.update({ where: { id: item.id }, data: { archivedToSheet: true } });
         auditBoard(null, 'item.archive.sheet', { itemId: item.id, photos: photoUrls.length });
+        lastArchiveError = null;
       } catch (error) {
         // Leave it unwritten; the next sweep retries. Later items may still succeed.
         logger.error(`Failed to archive board item ${item.id} to Google Sheets:`, error);
         auditBoard(null, 'item.archive.sheet.failed', { itemId: item.id, error: String(error) });
+        lastArchiveError = error instanceof Error ? error.message : String(error);
       }
     }
   } finally {
     sweeping = false;
   }
+}
+
+/**
+ * Archive one item right now instead of waiting for it to age off the board, and write it to the sheet.
+ * Used to check the Google Drive connection and see the archive format. Returns null if the item is
+ * missing or already archived.
+ */
+export async function archiveItemNow(id: string): Promise<{ sheets: boolean; written: boolean; error: string | null } | null> {
+  const prisma = getPrismaClient();
+  const item = await prisma.boardItem.findUnique({ where: { id } });
+  if (!item || item.archivedAt) return null;
+
+  await prisma.boardItem.update({ where: { id }, data: { archivedAt: new Date() } });
+  lastArchiveError = null;
+  await archiveInactive(); // archives this item, then writes everything still unwritten to the sheet
+
+  const after = await prisma.boardItem.findUniqueOrThrow({ where: { id } });
+  return { sheets: archiveEnabled(), written: after.archivedToSheet, error: after.archivedToSheet ? null : lastArchiveError };
 }
 
 export function startBoardScheduler(): void {
