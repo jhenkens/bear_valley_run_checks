@@ -15,6 +15,7 @@ model User {
   name      String
   isAdmin   Boolean  @default(false)
   oidcOnly  Boolean  @default(false) // Set on first OIDC login; disables magic link and passkeys
+  isDispatch Boolean @default(false) // Not a person: manages users, but is never listed as a patroller
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

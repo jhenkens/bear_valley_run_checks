@@ -4,7 +4,7 @@ import { getChecks, addCheck } from '../services/runCheckCache';
 import { requireAuth, AuthRequest } from '../auth/middleware';
 import { appConfig } from '../config/config';
 import { logger } from '../utils/logger';
-import { getAllPatrollers } from '../services/patrollerService';
+import { getAllPatrollers, getDispatchOnlyNames } from '../services/patrollerService';
 import { getLatestOAuth } from '../services/googleOAuth';
 const router = Router();
 
@@ -71,6 +71,12 @@ router.post('/runchecks', requireAuth, async (req: AuthRequest, res) => {
 
     const now = new Date();
     const maxFutureTime = new Date(now.getTime() + 15 * 60 * 1000); // +15 minutes
+
+    // Checked up front so a rejected batch saves nothing
+    const dispatchNames = await getDispatchOnlyNames();
+    if (checks.some(check => dispatchNames.has(String(check?.patroller).trim().toLowerCase()))) {
+      return res.status(400).json({ error: 'Dispatch cannot be recorded as the patroller' });
+    }
 
     const savedChecks = [];
     let allGoogleDriveSaved = true;

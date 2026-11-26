@@ -19,6 +19,7 @@ export interface AuthRequest extends Request {
     name: string;
     isAdmin: boolean;
     isSuperuser: boolean;
+    isDispatch: boolean;
     oidcOnly: boolean;
   };
 }
@@ -49,8 +50,10 @@ export async function requireAuth(
     id: user.id,
     email: user.email,
     name: user.name,
-    isAdmin: user.isAdmin || userIsSuperuser,
+    // Dispatch accounts are admins by virtue of the flag, so removing it removes the access too
+    isAdmin: user.isAdmin || user.isDispatch || userIsSuperuser,
     isSuperuser: userIsSuperuser,
+    isDispatch: user.isDispatch,
     oidcOnly: user.oidcOnly,
   };
 
@@ -65,6 +68,20 @@ export async function requireAdmin(
   await requireAuth(req, res, () => {
     if (!req.user?.isAdmin) {
       res.status(403).json({ error: 'Admin access required' });
+      return;
+    }
+    next();
+  });
+}
+
+export async function requireSuperuser(
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  await requireAuth(req, res, () => {
+    if (!req.user?.isSuperuser) {
+      res.status(403).json({ error: 'Superuser access required' });
       return;
     }
     next();

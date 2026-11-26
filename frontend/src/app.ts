@@ -4,6 +4,7 @@ import { detectDeviceName, isMobileDevice } from './utils/deviceName';
 import { resizeImageToJpeg } from './utils/image';
 import { connectSocket } from './services/socket';
 import { calculateRunColors, groupRunsBySection, formatTimeSince, RunWithColor } from './utils/colorLogic';
+import { searchByName } from './utils/runSearch';
 import {
   startAuthentication,
   startRegistration,
@@ -46,6 +47,11 @@ function formatBoardHour(hour: number): string {
 
 type BoardPicker = 'form' | 'edit' | 'copy';
 
+// A mouse or trackpad, as opposed to a touch screen
+function hasFinePointer(): boolean {
+  return window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+}
+
 export function createApp() {
   return {
     // State
@@ -79,6 +85,8 @@ export function createApp() {
     confirmTime: '',
     patrollerSearch: '',
     showAutocomplete: false,
+    pickerIndex: 0, // highlighted row in whichever patroller dropdown is open
+    pickerMoved: false, // whether the arrow keys moved it since the run check box was focused
     users: [] as any[],
     newUserEmail: '',
     newUserName: '',
@@ -91,6 +99,7 @@ export function createApp() {
     message: null as { type: 'success' | 'error' | 'warning'; text: string } | null,
     expandedSections: new Set<string>(),
     runSearchQuery: '',
+    highlightIndex: 0, // which search result Enter acts on
     searchExpandedSections: new Set<string>(),
     timezone: 'UTC' as string,
     googleOAuthStatus: null as any,
@@ -227,7 +236,8 @@ export function createApp() {
 
     // Patrollers matching the search, those who have run checked today first (not everyone works every day), then alphabetical
     get filteredPatrollers() {
-      return this.matchPatrollers(this.patrollerSearch);
+      // While the box still shows the chosen name, list everyone
+      return this.matchPatrollers(this.patrollerSearch === this.confirmPatroller ? '' : this.patrollerSearch);
     },
 
     matchPatrollers(text: string) {
@@ -248,25 +258,60 @@ export function createApp() {
     },
 
     get filteredGroupedRuns() {
-      const query = this.runSearchQuery.toLowerCase().trim();
+      const query = this.runSearchQuery.trim();
 
       if (!query) {
         return this.groupedRuns;
       }
 
+      // Grouping in match order puts the section holding the best match first
       const runsWithColors = calculateRunColors(this.runs, this.checks);
-      const grouped = new Map<string, RunWithColor[]>();
+      return Array.from(groupRunsBySection(searchByName(runsWithColors, query)).entries());
+    },
 
-      for (const run of runsWithColors) {
-        if (run.name.toLowerCase().includes(query)) {
-          if (!grouped.has(run.section)) {
-            grouped.set(run.section, []);
-          }
-          grouped.get(run.section)!.push(run);
-        }
-      }
+    // Results the arrow keys can reach, in the order they're shown
+    get searchResults() {
+      if (!this.runSearchQuery.trim()) return [];
+      return this.filteredGroupedRuns
+        .filter(([section, _]) => this.isSectionExpanded(section))
+        .flatMap(([_, runs]) => runs);
+    },
 
-      return Array.from(grouped.entries());
+    get highlightedRun() {
+      const results = this.searchResults;
+      return results[Math.min(this.highlightIndex, results.length - 1)] || null;
+    },
+
+    isHighlighted(run: RunWithColor) {
+      const highlighted = this.highlightedRun;
+      return !!highlighted && highlighted.name === run.name && highlighted.section === run.section;
+    },
+
+    runClasses(run: RunWithColor) {
+      return { selected: this.isInCart(run), highlighted: this.isHighlighted(run) };
+    },
+
+    moveHighlight(step: number) {
+      const count = this.searchResults.length;
+      if (count === 0) return;
+      const current = Math.min(this.highlightIndex, count - 1);
+      this.highlightIndex = (current + step + count) % count; // wraps at both ends
+      this.scrollToHighlight();
+    },
+
+    scrollToHighlight() {
+      (this as any).$nextTick(() => {
+        document.querySelector('.run-item.highlighted')?.scrollIntoView({ block: 'nearest' });
+      });
+    },
+
+    // Enter adds or removes the highlighted run, then selects the search text so the next
+    // run can be typed straight over it
+    toggleHighlighted(event: KeyboardEvent) {
+      const run = this.highlightedRun;
+      if (!run || event.isComposing) return;
+      this.toggleRunInCart(run);
+      (event.target as HTMLInputElement).select();
     },
 
     get totalMatchCount() {
@@ -483,7 +528,10 @@ export function createApp() {
           const usersRes = await api.getUsers();
           this.users = usersRes.users;
 
-          // Load Google OAuth status (admin only)
+        }
+
+        // Load Google OAuth status (superuser only)
+        if (this.user.isSuperuser) {
           try {
             this.googleOAuthStatus = await api.getGoogleOAuthStatus();
           } catch (err) {
@@ -491,7 +539,6 @@ export function createApp() {
             this.googleOAuthStatus = null;
           }
         } else {
-          // Clear OAuth status for non-admins
           this.googleOAuthStatus = null;
         }
       } catch (err: any) {
@@ -838,14 +885,34 @@ export function createApp() {
     openConfirm() {
       if (this.cart.length === 0) return;
       this.showConfirm = true;
-      // Default to logged in user's name
-      const defaultPatroller = this.user?.name || '';
+      // Default to logged in user's name; dispatch isn't a patroller, so has to pick one
+      const defaultPatroller = this.user?.isDispatch ? '' : this.user?.name || '';
       this.confirmPatroller = defaultPatroller;
       this.patrollerSearch = defaultPatroller;
       // Set time-only to current time (HH:MM format)
       const now = new Date();
       this.confirmTime = now.toTimeString().slice(0, 5); // HH:MM
       this.showAutocomplete = false;
+      this.focusPatrollerSearch();
+    },
+
+    // With a mouse or trackpad, go straight to searching. Not on touch screens, where it would
+    // throw up the keyboard when the pre-filled name is usually already right.
+    focusPatrollerSearch() {
+      if (!hasFinePointer()) return;
+      // A frame later, once the confirm page is visible enough to take focus
+      (this as any).$nextTick(() => requestAnimationFrame(() => {
+        document.querySelector<HTMLElement>('.patroller-search')?.focus();
+      }));
+    },
+
+    scrollToPickerHighlight() {
+      (this as any).$nextTick(() => {
+        // Only one dropdown is visible at a time
+        Array.from(document.querySelectorAll<HTMLElement>('.autocomplete-item.highlighted'))
+          .find(el => el.offsetParent)
+          ?.scrollIntoView({ block: 'nearest' });
+      });
     },
 
     async submitChecks() {
@@ -912,15 +979,106 @@ export function createApp() {
       }
     },
 
+    // On the Runs page, Tab (and Shift+Tab) only moves between the search box and Continue
+    cycleRunsFocus(event: KeyboardEvent) {
+      if (!this.user || this.currentTab !== 'runs' || this.showConfirm || this.showPasskeyPrompt) return;
+      const search = document.querySelector<HTMLElement>('.search-input');
+      const next = document.querySelector<HTMLElement>('.cart-continue');
+      event.preventDefault();
+      // Continue only exists while something is selected
+      (document.activeElement === search && this.cart.length > 0 ? next : search)?.focus();
+    },
+
+    // On the confirm page, Tab (and Shift+Tab) only moves between the patroller box and Submit
+    cycleConfirmFocus(event: KeyboardEvent) {
+      if (!this.showConfirm) return;
+      const name = document.querySelector<HTMLElement>('.patroller-search');
+      const submit = document.querySelector<HTMLElement>('.confirm-submit');
+      event.preventDefault();
+      if (document.activeElement !== name) {
+        name?.focus();
+        return;
+      }
+      // Leaving the box takes the highlighted name, but only if you typed or arrowed to it,
+      // so tabbing past an empty box never picks someone by accident
+      const typed = this.patrollerSearch !== '' && this.patrollerSearch !== this.confirmPatroller;
+      if (typed || this.pickerMoved) this.pickHighlighted('confirm', event);
+      this.closePicker('confirm');
+      submit?.focus();
+    },
+
+    // Keyboard control for the patroller dropdowns: the run check one ('confirm') and the board's assignee pickers
+    isPickerOpen(which: 'confirm' | BoardPicker) {
+      return which === 'confirm' ? this.showAutocomplete : this.boardAssigneeOpen === which;
+    },
+
+    pickerMatches(which: 'confirm' | BoardPicker) {
+      return which === 'confirm' ? this.filteredPatrollers : this.boardAssigneeMatches(which);
+    },
+
+    // Up/down walk the list, wrapping at both ends. If it's closed, they open it instead.
+    movePicker(which: 'confirm' | BoardPicker, step: number) {
+      if (!this.isPickerOpen(which)) {
+        this.pickerIndex = 0;
+        if (which === 'confirm') this.showAutocomplete = true;
+        else this.boardAssigneeOpen = which;
+        return;
+      }
+      const count = this.pickerMatches(which).length;
+      if (count === 0) return;
+      this.pickerMoved = true;
+      this.pickerIndex = (Math.min(this.pickerIndex, count - 1) + step + count) % count;
+      this.scrollToPickerHighlight();
+    },
+
+    isPickerHighlighted(which: 'confirm' | BoardPicker, index: number) {
+      return index === Math.min(this.pickerIndex, this.pickerMatches(which).length - 1);
+    },
+
+    pickHighlighted(which: 'confirm' | BoardPicker, event: KeyboardEvent) {
+      if (!this.isPickerOpen(which) || event.isComposing) return;
+      const matches = this.pickerMatches(which);
+      const match = matches[Math.min(this.pickerIndex, matches.length - 1)];
+      if (!match) return;
+      if (which === 'confirm') this.selectPatroller(match.name);
+      else this.pickBoardAssignee(which, match.name);
+    },
+
+    closePicker(which: 'confirm' | BoardPicker) {
+      if (which === 'confirm') this.showAutocomplete = false;
+      else this.closeBoardAssignee();
+    },
+
+    // Escape closes just the dropdown, not the dialog it may be sitting in
+    escapePicker(which: 'confirm' | BoardPicker, event: KeyboardEvent) {
+      if (!this.isPickerOpen(which)) return;
+      event.stopPropagation();
+      this.closePicker(which);
+    },
+
     // Autocomplete
     filterPatrollers() {
+      this.pickerIndex = 0;
+      this.confirmPatroller = ''; // edited text isn't a chosen patroller until one is picked
       this.showAutocomplete = true;
     },
 
-    // Focusing the box clears it so a different patroller can be searched right away
-    focusPatroller() {
-      this.clearPatroller();
+    // With a keyboard, focusing keeps the name and selects it, so typing replaces it but tabbing
+    // through doesn't lose it. On touch the box is cleared, to search right away.
+    focusPatroller(event: FocusEvent) {
+      if (!hasFinePointer()) this.clearPatroller();
+      else (event.target as HTMLInputElement).select();
+      this.pickerMoved = false;
+      this.pickerIndex = Math.max(0, this.filteredPatrollers.findIndex(p => p.name === this.confirmPatroller));
       this.showAutocomplete = true;
+      this.scrollToPickerHighlight();
+    },
+
+    // A click would otherwise drop the selection, and typing would add to the name instead of replacing it
+    // The browser moves the caret after the click handlers run, so select a tick later.
+    selectPatrollerText(event: MouseEvent) {
+      const input = event.target as HTMLInputElement;
+      setTimeout(() => input.select());
     },
 
     selectPatroller(patroller: string) {
@@ -1058,6 +1216,17 @@ export function createApp() {
         await this.loadData();
       } catch (err: any) {
         this.error = err.message || 'Failed to update admin status';
+      }
+    },
+
+    async toggleDispatch(user: any) {
+      try {
+        this.error = null;
+        await api.toggleDispatch(user.id, !user.isDispatch);
+        this.showMessage('success', 'Dispatch status updated');
+        await this.loadData();
+      } catch (err: any) {
+        this.error = err.message || 'Failed to update dispatch status';
       }
     },
 
@@ -1205,6 +1374,7 @@ export function createApp() {
     },
 
     openBoardAssignee(which: BoardPicker) {
+      this.pickerIndex = 0;
       this.boardAssigneeOpen = which;
     },
 
@@ -1683,6 +1853,7 @@ export function createApp() {
     },
 
     handleRunSearch() {
+      this.highlightIndex = 0;
       const query = this.runSearchQuery.toLowerCase().trim();
 
       if (!query) {

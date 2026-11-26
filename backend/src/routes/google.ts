@@ -1,14 +1,14 @@
 import crypto from 'crypto';
 import { Router, Request } from 'express';
 import { google } from 'googleapis';
-import { requireAuth, requireAdmin } from '../auth/middleware';
+import { requireAuth, requireSuperuser } from '../auth/middleware';
 import { prisma } from '../config/database';
 import { refreshRunProvider } from '../providers';
 
 // Extend Express Request type
 declare module 'express-serve-static-core' {
   interface Request {
-    user?: { id: string; email: string | null; name: string; isAdmin: boolean; isSuperuser: boolean; oidcOnly: boolean };
+    user?: { id: string; email: string | null; name: string; isAdmin: boolean; isSuperuser: boolean; isDispatch: boolean; oidcOnly: boolean };
   }
 }
 import { appConfig } from '../config/config';
@@ -31,7 +31,7 @@ const SCOPES = [
 ];
 
 // GET /api/google/oauth/authorize - Start OAuth flow
-router.get('/oauth/authorize', requireAuth, requireAdmin, (req, res) => {
+router.get('/oauth/authorize', requireAuth, requireSuperuser, (req, res) => {
   // Random single-use state (CSRF protection); never the session id, which would leak to Google
   const state = crypto.randomBytes(24).toString('hex');
   req.session.googleOAuthState = state;
@@ -53,7 +53,7 @@ router.get('/oauth/authorize', requireAuth, requireAdmin, (req, res) => {
 });
 
 // GET /api/google/oauth/callback - Handle OAuth callback
-router.get('/oauth/callback', requireAuth, requireAdmin, async (req, res) => {
+router.get('/oauth/callback', requireAuth, requireSuperuser, async (req, res) => {
   const { code, state } = req.query;
 
   // Verify state matches the one issued for this session (CSRF protection), once only
@@ -204,7 +204,7 @@ router.get('/oauth/callback', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // POST /api/google/oauth/folder - Update selected folder
-router.post('/oauth/folder', requireAuth, requireAdmin, async (req, res) => {
+router.post('/oauth/folder', requireAuth, requireSuperuser, async (req, res) => {
   const { folderId, folderName, sheetsId } = req.body;
 
   if (!folderId) {
@@ -241,7 +241,7 @@ router.post('/oauth/folder', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // POST /api/google/admin/refresh-runs - Refresh run list from Google Sheets
-router.post('/admin/refresh-runs', requireAuth, requireAdmin, async (req, res) => {
+router.post('/admin/refresh-runs', requireAuth, requireSuperuser, async (req, res) => {
   try {
     if (appConfig.runProvider !== 'sheets') {
       return res.status(400).json({
@@ -271,7 +271,7 @@ router.post('/admin/refresh-runs', requireAuth, requireAdmin, async (req, res) =
 });
 
 // POST /api/google/oauth/refresh - Manually refresh token
-router.post('/oauth/refresh', requireAuth, requireAdmin, async (req, res) => {
+router.post('/oauth/refresh', requireAuth, requireSuperuser, async (req, res) => {
   try {
     const oauth = await prisma.googleOAuth.findUnique({
       where: { userId: req.user!.id },
@@ -329,7 +329,7 @@ router.post('/oauth/refresh', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // GET /api/google/oauth/status - Check OAuth status
-router.get('/oauth/status', requireAuth, requireAdmin, async (req, res) => {
+router.get('/oauth/status', requireAuth, requireSuperuser, async (req, res) => {
   try {
     // Find any OAuth record (active or inactive)
     const oauth = await prisma.googleOAuth.findFirst({
@@ -366,7 +366,7 @@ router.get('/oauth/status', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // DELETE /api/google/oauth/disconnect - Remove OAuth connection
-router.delete('/oauth/disconnect', requireAuth, requireAdmin, async (req, res) => {
+router.delete('/oauth/disconnect', requireAuth, requireSuperuser, async (req, res) => {
   try {
     await prisma.googleOAuth.deleteMany({
       where: { userId: req.user!.id },
@@ -382,7 +382,7 @@ router.delete('/oauth/disconnect', requireAuth, requireAdmin, async (req, res) =
 });
 
 // POST /api/google/oauth/test-mark-inactive - Testing endpoint to force inactive state
-router.post('/oauth/test-mark-inactive', requireAuth, requireAdmin, async (req, res) => {
+router.post('/oauth/test-mark-inactive', requireAuth, requireSuperuser, async (req, res) => {
   try {
     const oauth = await prisma.googleOAuth.findFirst({
       where: { isActive: true },

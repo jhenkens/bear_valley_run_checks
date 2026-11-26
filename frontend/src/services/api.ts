@@ -203,6 +203,13 @@ export const api = {
     });
   },
 
+  async toggleDispatch(userId: string, isDispatch: boolean) {
+    return fetchJSON<{ user: any }>(`${API_BASE}/users/${userId}/dispatch`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isDispatch }),
+    });
+  },
+
   async deleteUser(userId: string) {
     return fetchJSON<{ message: string }>(`${API_BASE}/users/${userId}`, {
       method: 'DELETE',

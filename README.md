@@ -286,7 +286,15 @@ Seeding replaces the board contents. The development config uses the `config` ru
 Defined in `config.yaml`, superusers:
 - Always have admin access
 - Cannot be demoted or deleted
+- Are the only users who can manage the Google Drive connection
 - Are marked with a badge in the admin panel
+
+### Dispatch
+
+A shared login that isn't a person. Create a user, then tick **Dispatch** while editing it in the admin panel. It needs an email address to sign in.
+- Can manage users like an admin (unticking Dispatch removes that access, unless the account was also made an admin)
+- Cannot manage the Google Drive connection
+- Is never listed as a patroller or board assignee. It can still submit run checks, but has to choose which patroller did them
 
 ### Regular Users
 

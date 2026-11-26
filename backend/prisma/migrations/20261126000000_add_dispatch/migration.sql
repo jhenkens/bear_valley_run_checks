@@ -1,0 +1,1 @@
+ALTER TABLE "User" ADD COLUMN "isDispatch" BOOLEAN NOT NULL DEFAULT false;

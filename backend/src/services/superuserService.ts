@@ -26,6 +26,7 @@ export async function syncSuperusers(): Promise<void> {
           data: {
             name: superuser.name,
             isAdmin: true,
+            isDispatch: false,
           },
         });
         logger.debug(`  ✓ Updated superuser: ${superuser.email}`);

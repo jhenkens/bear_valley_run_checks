@@ -118,7 +118,7 @@ if (appRoot) {
         </div>
 
         <!-- Runs Tab -->
-        <div class="content" x-show="currentTab === 'runs' && !showConfirm">
+        <div class="content page-grid" x-show="currentTab === 'runs' && !showConfirm">
           <!-- Search Input -->
           <div class="search-container">
             <div class="search-input-wrapper">
@@ -126,6 +126,12 @@ if (appRoot) {
                 type="text"
                 x-model="runSearchQuery"
                 @input="handleRunSearch"
+                @keydown.down.prevent="moveHighlight(1)"
+                @keydown.up.prevent="moveHighlight(-1)"
+                @keydown.enter.prevent="toggleHighlighted($event)"
+                @keydown.escape="clearRunSearch"
+                autocomplete="off"
+                enterkeyhint="done"
                 placeholder="Search runs by name..."
                 class="search-input"
               >
@@ -146,18 +152,20 @@ if (appRoot) {
             </div>
           </div>
 
-          <template x-for="[section, runs] in filteredGroupedRuns" :key="section">
+          <!-- The loop variable must not be named "runs": it would hide the component's full list
+               from the methods called inside the loop -->
+          <template x-for="[section, sectionRuns] in filteredGroupedRuns" :key="section">
             <div class="section-runs">
               <div class="section-header" @click="toggleSection(section)" style="cursor: pointer; user-select: none;">
                 <h3>
                   <span x-text="isSectionExpanded(section) ? '▼' : '▶'" style="display: inline-block; width: 1.2em;"></span>
                   <span x-text="section"></span>
-                  <span style="font-size: 0.85em; font-weight: normal; margin-left: 0.5rem; color: #666;" x-text="'(' + runs.length + ')'"></span>
+                  <span style="font-size: 0.85em; font-weight: normal; margin-left: 0.5rem; color: #666;" x-text="'(' + sectionRuns.length + ')'"></span>
                 </h3>
               </div>
               <div x-show="isSectionExpanded(section)">
-                <template x-for="run in runs" :key="run.name">
-                  <div class="run-item" :class="isInCart(run) && 'selected'" @click="toggleRunInCart(run)">
+                <template x-for="run in sectionRuns" :key="run.name">
+                  <div class="run-item run-selectable" :class="runClasses(run)" @click="toggleRunInCart(run)">
                     <div class="run-info">
                       <div class="run-name" x-text="run.name"></div>
                       <div class="run-time" x-text="formatTimeSince(run.minutesSinceCheck) + (run.lastCheck ? ' · ' + run.lastCheck.patroller : '')"></div>
@@ -171,7 +179,7 @@ if (appRoot) {
         </div>
 
         <!-- History Page: every run with today's checks -->
-        <div class="content" x-show="currentTab === 'history' && !showConfirm">
+        <div class="content page-grid" x-show="currentTab === 'history' && !showConfirm">
           <template x-for="[section, runs] in historyBySection" :key="section">
             <div class="section-runs">
               <div class="section-header" @click="toggleSection('history-' + section)" style="cursor: pointer; user-select: none;">
@@ -184,7 +192,7 @@ if (appRoot) {
               <div x-show="isSectionExpanded('history-' + section)">
                 <template x-for="run in runs" :key="run.runName">
                   <div>
-                    <div class="run-item">
+                    <div class="run-item run-static">
                       <div class="run-info">
                         <div class="run-name" x-text="run.runName"></div>
                         <div x-show="run.checks.length === 0" class="run-time" style="color: #999; font-style: italic;">No checks</div>
@@ -200,7 +208,7 @@ if (appRoot) {
         </div>
 
         <!-- Patrollers Page: who has checked something today -->
-        <div class="content" x-show="currentTab === 'patrollers' && !showConfirm">
+        <div class="content page-grid" x-show="currentTab === 'patrollers' && !showConfirm">
           <template x-for="[patroller, patrollerChecks] in checksByPatroller" :key="patroller">
             <div class="history-section">
               <div class="section-header" @click="toggleSection('patroller-' + patroller)" style="cursor: pointer; user-select: none;">
@@ -239,12 +247,12 @@ if (appRoot) {
               <div class="form-group autocomplete" @click.outside="showAutocomplete = false">
                 <label>Patroller</label>
                 <div class="input-with-clear">
-                  <input type="text" x-model="patrollerSearch" @input="filterPatrollers" @focus="focusPatroller" placeholder="Search patroller...">
+                  <input type="text" class="patroller-search" x-model="patrollerSearch" @input="filterPatrollers" @focus="focusPatroller($event)" @click="selectPatrollerText($event)" @keydown.down.prevent="movePicker('confirm', 1)" @keydown.up.prevent="movePicker('confirm', -1)" @keydown.enter.prevent="pickHighlighted('confirm', $event)" @keydown.escape="escapePicker('confirm', $event)" autocomplete="off" placeholder="Search patroller...">
                   <button type="button" class="clear-btn" x-show="patrollerSearch.length > 0" @click="clearPatroller">&times;</button>
                 </div>
-                <div class="autocomplete-dropdown" x-show="showAutocomplete">
-                  <template x-for="p in filteredPatrollers" :key="p.name">
-                    <div class="autocomplete-item" @click="selectPatroller(p.name)">
+                <div class="autocomplete-dropdown" tabindex="-1" x-show="showAutocomplete">
+                  <template x-for="(p, i) in filteredPatrollers" :key="p.name">
+                    <div class="autocomplete-item" :class="isPickerHighlighted('confirm', i) && 'highlighted'" @click="selectPatroller(p.name)">
                       <span x-text="p.name"></span>
                       <span x-show="p.checkedToday" class="checked-today">✓ checked today</span>
                     </div>
@@ -258,7 +266,7 @@ if (appRoot) {
                 <small style="color: #666; font-size: 0.85em; display: block; margin-top: 0.25rem;" x-text="'Today, Timezone: ' + timezone"></small>
               </div>
 
-              <button class="btn btn-success" @click="submitChecks" :disabled="isSubmitting">
+              <button class="btn btn-success confirm-submit" @keydown.tab.window="cycleConfirmFocus($event)" @click="submitChecks" :disabled="isSubmitting">
                 <span x-text="isSubmitting ? 'Submitting...' : 'Submit'"></span>
               </button>
               <button class="btn" @click="clearCart" style="margin-top: 0.5rem;" :disabled="isSubmitting">Cancel</button>
@@ -269,7 +277,7 @@ if (appRoot) {
         </div>
 
         <!-- Board Tab -->
-        <div class="content" x-show="currentTab === 'board' && features.board && !showConfirm">
+        <div class="content page-narrow" x-show="currentTab === 'board' && features.board && !showConfirm">
           <div class="board-create">
             <textarea
               class="board-input"
@@ -302,19 +310,19 @@ if (appRoot) {
                 <div class="board-inline">
                   <div class="autocomplete" @click.outside="closeBoardAssignee">
                     <div class="input-with-clear">
-                      <input type="text" x-model="boardForm.assignee" @input="openBoardAssignee('form')" @focus="openBoardAssignee('form')" placeholder="Unassigned">
+                      <input type="text" x-model="boardForm.assignee" @input="openBoardAssignee('form')" @focus="openBoardAssignee('form')" @keydown.down.prevent="movePicker('form', 1)" @keydown.up.prevent="movePicker('form', -1)" @keydown.enter.prevent="pickHighlighted('form', $event)" @keydown.escape="escapePicker('form', $event)" @keydown.tab="closePicker('form')" autocomplete="off" placeholder="Unassigned">
                       <button type="button" class="clear-btn" x-show="boardForm.assignee.length > 0" @click="clearBoardAssignee('form')" aria-label="Clear assignee">&times;</button>
                     </div>
-                    <div class="autocomplete-dropdown" x-show="boardAssigneeOpen === 'form'">
-                      <template x-for="p in boardAssigneeMatches('form')" :key="p.name">
-                        <div class="autocomplete-item" @click="pickBoardAssignee('form', p.name)">
+                    <div class="autocomplete-dropdown" tabindex="-1" x-show="boardAssigneeOpen === 'form'">
+                      <template x-for="(p, i) in boardAssigneeMatches('form')" :key="p.name">
+                        <div class="autocomplete-item" :class="isPickerHighlighted('form', i) && 'highlighted'" @click="pickBoardAssignee('form', p.name)">
                           <span x-text="p.name"></span>
                           <span x-show="p.checkedToday" class="checked-today">✓ checked today</span>
                         </div>
                       </template>
                     </div>
                   </div>
-                  <button type="button" class="board-btn" @click="assignBoardToMe('form')">Me</button>
+                  <button type="button" class="board-btn" x-show="user && !user.isDispatch" @click="assignBoardToMe('form')">Me</button>
                 </div>
               </div>
               <div class="form-group" x-show="boardForm.location === 'tasks'">
@@ -385,7 +393,7 @@ if (appRoot) {
                   </div>
 
                   <div class="board-actions">
-                    <button class="board-btn" x-show="showBoardTaskInfo(item) && !item.assignee && !item.doneAt" @click="takeBoardTask(item)">Take it</button>
+                    <button class="board-btn" x-show="user && !user.isDispatch && showBoardTaskInfo(item) && !item.assignee && !item.doneAt" @click="takeBoardTask(item)">Take it</button>
                     <button class="board-btn" :class="item.doneAt && 'on'" x-show="showBoardTaskInfo(item)" @click="toggleBoardDone(item)" x-text="item.doneAt ? 'Reopen' : 'Done'"></button>
                     <button class="board-btn" x-show="boardLocationKind(item) === 'debrief' && boardCopyBriefReady" @click="copyToNextBoardBrief(item)" x-text="boardCopyBriefLabel(item)"></button>
                     <button class="board-btn" x-show="boardLocationKind(item) === 'brief'" @click="askCopyBoardItem(item, 'tasks')">Copy to Task</button>
@@ -424,19 +432,19 @@ if (appRoot) {
                       <div class="board-inline">
                         <div class="autocomplete" @click.outside="closeBoardAssignee">
                           <div class="input-with-clear">
-                            <input type="text" x-model="boardEdit.assignee" @input="openBoardAssignee('edit')" @focus="openBoardAssignee('edit')" placeholder="Unassigned">
+                            <input type="text" x-model="boardEdit.assignee" @input="openBoardAssignee('edit')" @focus="openBoardAssignee('edit')" @keydown.down.prevent="movePicker('edit', 1)" @keydown.up.prevent="movePicker('edit', -1)" @keydown.enter.prevent="pickHighlighted('edit', $event)" @keydown.escape="escapePicker('edit', $event)" @keydown.tab="closePicker('edit')" autocomplete="off" placeholder="Unassigned">
                             <button type="button" class="clear-btn" x-show="boardEdit.assignee.length > 0" @click="clearBoardAssignee('edit')" aria-label="Clear assignee">&times;</button>
                           </div>
-                          <div class="autocomplete-dropdown" x-show="boardAssigneeOpen === 'edit'">
-                            <template x-for="p in boardAssigneeMatches('edit')" :key="p.name">
-                              <div class="autocomplete-item" @click="pickBoardAssignee('edit', p.name)">
+                          <div class="autocomplete-dropdown" tabindex="-1" x-show="boardAssigneeOpen === 'edit'">
+                            <template x-for="(p, i) in boardAssigneeMatches('edit')" :key="p.name">
+                              <div class="autocomplete-item" :class="isPickerHighlighted('edit', i) && 'highlighted'" @click="pickBoardAssignee('edit', p.name)">
                                 <span x-text="p.name"></span>
                                 <span x-show="p.checkedToday" class="checked-today">✓ checked today</span>
                               </div>
                             </template>
                           </div>
                         </div>
-                        <button type="button" class="board-btn" @click="assignBoardToMe('edit')">Me</button>
+                        <button type="button" class="board-btn" x-show="user && !user.isDispatch" @click="assignBoardToMe('edit')">Me</button>
                       </div>
                     </div>
                     <div class="form-group" x-show="boardEditLocation === 'tasks'">
@@ -466,7 +474,7 @@ if (appRoot) {
         </div>
 
         <!-- Account Tab -->
-        <div class="content" x-show="currentTab === 'account'">
+        <div class="content page-narrow" x-show="currentTab === 'account'">
           <div class="confirm-list" style="margin-bottom: 2rem;" x-show="user && user.oidcOnly">
             <p>Linked to Bear Valley Ski Patrol Auth</p>
           </div>
@@ -503,7 +511,7 @@ if (appRoot) {
 
         <!-- Admin Tab -->
         <template x-if="currentTab === 'admin' && user && user.isAdmin">
-        <div class="content">
+        <div class="content page-admin">
           <!-- Google Drive OAuth Section (Superuser only) -->
           <details class="confirm-list collapsible" style="margin-bottom: 2rem;" x-show="user && user.isSuperuser">
             <summary><h3>Google Drive Connection</h3></summary>
@@ -600,6 +608,7 @@ if (appRoot) {
                         <span>
                           <span x-text="u.name" :class="{ 'dup-warning': isDuplicateName(u) }"></span>
                           <span x-show="u.isSuperuser" class="user-badge">SUPERUSER</span>
+                          <span x-show="u.isDispatch" class="user-badge">DISPATCH</span>
                           <span x-show="isDuplicateName(u)" class="dup-warning">⚠ Duplicate name</span>
                         </span>
                       </template>
@@ -618,7 +627,16 @@ if (appRoot) {
                     <td x-text="formatUserDate(u.createdAt)"></td>
                     <td>
                       <template x-if="editingUserId === u.id">
-                        <input type="checkbox" :checked="u.isAdmin" @change="toggleAdmin(u)" :disabled="u.isSuperuser">
+                        <div>
+                          <label class="user-flag">
+                            <input type="checkbox" :checked="u.isAdmin" @change="toggleAdmin(u)" :disabled="u.isSuperuser || u.isDispatch">
+                            Admin
+                          </label>
+                          <label class="user-flag" title="Not a person: can manage users, but can't be recorded as a patroller">
+                            <input type="checkbox" :checked="u.isDispatch" @change="toggleDispatch(u)" :disabled="u.isSuperuser">
+                            Dispatch
+                          </label>
+                        </div>
                       </template>
                       <template x-if="editingUserId !== u.id">
                         <span x-show="u.isAdmin" title="Admin">✓</span>
@@ -655,7 +673,7 @@ if (appRoot) {
           <div class="cart-count" x-text="cart.length + ' run' + (cart.length !== 1 ? 's' : '') + ' selected'"></div>
           <div class="cart-actions">
             <button class="btn btn-clear" @click="clearCart">Clear</button>
-            <button class="btn" @click="openConfirm">Continue</button>
+            <button class="btn cart-continue" @click="openConfirm" @keydown.tab.window="cycleRunsFocus($event)">Continue</button>
           </div>
         </div>
 
@@ -671,19 +689,19 @@ if (appRoot) {
                 <div class="board-inline">
                   <div class="autocomplete" @click.outside="closeBoardAssignee">
                     <div class="input-with-clear">
-                      <input type="text" x-model="boardCopy.assignee" @input="openBoardAssignee('copy')" @focus="openBoardAssignee('copy')" placeholder="Unassigned">
+                      <input type="text" x-model="boardCopy.assignee" @input="openBoardAssignee('copy')" @focus="openBoardAssignee('copy')" @keydown.down.prevent="movePicker('copy', 1)" @keydown.up.prevent="movePicker('copy', -1)" @keydown.enter.prevent="pickHighlighted('copy', $event)" @keydown.escape="escapePicker('copy', $event)" @keydown.tab="closePicker('copy')" autocomplete="off" placeholder="Unassigned">
                       <button type="button" class="clear-btn" x-show="boardCopy.assignee.length > 0" @click="clearBoardAssignee('copy')" aria-label="Clear assignee">&times;</button>
                     </div>
-                    <div class="autocomplete-dropdown" x-show="boardAssigneeOpen === 'copy'">
-                      <template x-for="p in boardAssigneeMatches('copy')" :key="p.name">
-                        <div class="autocomplete-item" @click="pickBoardAssignee('copy', p.name)">
+                    <div class="autocomplete-dropdown" tabindex="-1" x-show="boardAssigneeOpen === 'copy'">
+                      <template x-for="(p, i) in boardAssigneeMatches('copy')" :key="p.name">
+                        <div class="autocomplete-item" :class="isPickerHighlighted('copy', i) && 'highlighted'" @click="pickBoardAssignee('copy', p.name)">
                           <span x-text="p.name"></span>
                           <span x-show="p.checkedToday" class="checked-today">✓ checked today</span>
                         </div>
                       </template>
                     </div>
                   </div>
-                  <button type="button" class="board-btn" @click="assignBoardToMe('copy')">Me</button>
+                  <button type="button" class="board-btn" x-show="user && !user.isDispatch" @click="assignBoardToMe('copy')">Me</button>
                 </div>
               </div>
               <div class="form-group">

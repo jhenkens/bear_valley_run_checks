@@ -219,6 +219,11 @@ body {
   background: #27ae60;
 }
 
+.confirm-submit:focus {
+  outline: 3px solid #2c3e50;
+  outline-offset: 2px;
+}
+
 /* Sections */
 .section-header {
   background: white;
@@ -331,12 +336,35 @@ body {
   transition: background 0.2s;
 }
 
+.run-item.run-static {
+  cursor: default;
+}
+
 .run-item:active {
   background: #f8f8f8;
 }
 
+/* Selected (in the cart): tint, side bar and checkmark */
 .run-item.selected {
-  background: #e8f4f8;
+  background: #dcedfa;
+  box-shadow: inset 5px 0 0 #3498db;
+}
+
+.run-item.selected .run-name::before {
+  content: '✓ ';
+  color: #1f6fa8;
+  font-weight: 700;
+}
+
+/* Highlighted (what Enter acts on while searching): an outline, so it can combine with selected */
+.run-item.highlighted {
+  outline: 3px solid #2c3e50;
+  outline-offset: -3px;
+}
+
+/* Keeps a row scrolled to by the arrow keys clear of the selection bar */
+.run-selectable {
+  scroll-margin: 1rem 0 7rem;
 }
 
 .run-info {
@@ -403,6 +431,11 @@ body {
   padding: 0.5rem 1.5rem;
   background: white;
   color: #3498db;
+}
+
+.cart-banner .cart-continue:focus {
+  outline: 3px solid #2c3e50;
+  outline-offset: 2px;
 }
 
 .cart-banner .btn-clear {
@@ -656,10 +689,10 @@ body {
   table-layout: fixed; /* column widths stay put when a row switches to edit mode */
 }
 
-.user-table .col-name { width: 20%; }
-.user-table .col-email { width: 24%; }
+.user-table .col-name { width: 18%; }
+.user-table .col-email { width: 21%; }
 .user-table .col-date { width: 11rem; }
-.user-table .col-admin { width: 5rem; }
+.user-table .col-admin { width: 8rem; }
 .user-table .col-welcome { width: 9rem; }
 .user-table .col-actions { width: 15rem; }
 
@@ -726,6 +759,13 @@ body {
   border-radius: 3px;
   font-size: 0.75rem;
   margin-left: 0.5rem;
+}
+
+.user-flag {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
 }
 
 .user-actions > * {
@@ -801,6 +841,12 @@ body {
 
 .autocomplete-item:hover {
   background: #f5f5f5;
+}
+
+.autocomplete-item.highlighted {
+  background: #eef2f5;
+  outline: 3px solid #2c3e50;
+  outline-offset: -3px;
 }
 
 /* Mobile optimizations */
@@ -1147,4 +1193,88 @@ body {
   color: white;
   font-size: 1.4rem;
   cursor: pointer;
+}
+
+/* Wider screens. Everything above is the phone layout and stays as it is below this width. */
+@media (min-width: 700px) {
+  /* Run sections sit side by side. A grid (not CSS columns) so collapsing one never moves
+     another to a different column. */
+  .page-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    align-items: start;
+    align-content: start;
+    gap: 1rem;
+    padding-bottom: 7rem;
+    max-width: 1920px;
+    margin: 0 auto;
+  }
+
+  .page-grid > * {
+    margin-bottom: 0;
+  }
+
+  .page-grid > .search-container {
+    grid-column: 1 / -1;
+  }
+
+  .search-container .search-input-wrapper {
+    max-width: 32rem;
+  }
+
+  /* Denser rows, to get more of the mountain on one screen */
+  .page-grid .section-header {
+    padding: 0.6rem 0.75rem;
+  }
+
+  .page-grid .run-item {
+    padding: 0.4rem 0.75rem;
+  }
+
+  .page-grid .run-name {
+    margin-bottom: 0;
+    line-height: 1.4;
+  }
+
+  .page-grid .run-indicator {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+  }
+
+  /* Tabs keep their natural size instead of stretching across the window */
+  .tab {
+    flex: 0 0 auto;
+    min-width: 10rem;
+  }
+
+  .page-narrow,
+  .page-admin {
+    margin: 0 auto;
+  }
+
+  .page-narrow {
+    max-width: 760px;
+  }
+
+  .page-admin {
+    max-width: 1280px;
+  }
+
+  /* The selection bar floats near the work instead of spanning the window */
+  .cart-banner {
+    left: 50%;
+    right: auto;
+    bottom: 1rem;
+    transform: translateX(-50%);
+    width: min(36rem, calc(100% - 2rem));
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  }
+}
+
+@media (hover: hover) {
+  .run-item:not(.selected):not(.run-static):hover {
+    background: #f5f8fa;
+  }
 }

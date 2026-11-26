@@ -25,6 +25,7 @@ router.get('/users', requireAdmin, async (req, res) => {
         email: true,
         name: true,
         isAdmin: true,
+        isDispatch: true,
         createdAt: true,
       },
       orderBy: {
@@ -34,6 +35,7 @@ router.get('/users', requireAdmin, async (req, res) => {
 
     const usersWithSuperuser = users.map((user: typeof users[number]) => ({
       ...user,
+      isAdmin: user.isAdmin || user.isDispatch,
       isSuperuser: user.email ? isSuperuser(user.email) : false,
     }));
 
@@ -297,6 +299,47 @@ router.patch('/users/:id/admin', requireAdmin, async (req, res) => {
     });
   } catch (error) {
     logger.error('Error updating user admin status:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PATCH /api/users/:id/dispatch - Toggle dispatch (non-person account) status
+router.patch('/users/:id/dispatch', requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params as { id: string };
+    const { isDispatch } = req.body;
+
+    if (typeof isDispatch !== 'boolean') {
+      return res.status(400).json({ error: 'isDispatch must be a boolean' });
+    }
+
+    const prisma = getPrismaClient();
+    const user = await prisma.user.findUnique({
+      where: { id },
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    if (user.email && isSuperuser(user.email)) {
+      return res.status(403).json({ error: 'Cannot modify superuser' });
+    }
+
+    const updated = await prisma.user.update({
+      where: { id },
+      data: { isDispatch },
+    });
+
+    res.json({
+      user: {
+        ...updated,
+        isAdmin: updated.isAdmin || updated.isDispatch,
+        isSuperuser: false,
+      },
+    });
+  } catch (error) {
+    logger.error('Error updating user dispatch status:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
