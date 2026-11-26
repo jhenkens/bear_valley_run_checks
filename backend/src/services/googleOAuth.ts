@@ -1,4 +1,6 @@
-import { google } from 'googleapis';
+import { auth, drive as googleDrive } from '@googleapis/drive';
+import { oauth2 as googleOAuth2 } from '@googleapis/oauth2';
+import { sheets as googleSheets } from '@googleapis/sheets';
 import { prisma } from '../config/database';
 import { appConfig } from '../config/config';
 import { logger } from '../utils/logger';
@@ -25,7 +27,7 @@ const MIN_REFRESH_RETRY_MS = 60 * 1000;
 
 // Get OAuth2 client configured with environment credentials
 function getOAuth2Client() {
-  return new google.auth.OAuth2(
+  return new auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
     `${appConfig.appUrl}/api/google/oauth/callback`
@@ -135,7 +137,7 @@ export async function testOAuthToken(accessToken: string): Promise<boolean> {
     const oauth2Client = getOAuth2Client();
     oauth2Client.setCredentials({ access_token: accessToken });
 
-    const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+    const oauth2 = googleOAuth2({ version: 'v2', auth: oauth2Client });
     await oauth2.userinfo.get();
 
     return true;
@@ -168,8 +170,8 @@ export async function getAuthenticatedSheetsClient() {
       refresh_token: tokens.refreshToken,
     });
 
-    const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
-    const drive = google.drive({ version: 'v3', auth: oauth2Client });
+    const sheets = googleSheets({ version: 'v4', auth: oauth2Client });
+    const drive = googleDrive({ version: 'v3', auth: oauth2Client });
 
     // Mark as active since we successfully authenticated
     // This will reactivate an inactive OAuth if it works

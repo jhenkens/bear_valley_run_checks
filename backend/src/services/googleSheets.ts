@@ -1,4 +1,3 @@
-import { google } from 'googleapis';
 import { formatInTimeZone } from 'date-fns-tz';
 import { appConfig } from '../config/config';
 import { logger } from '../utils/logger';

@@ -1,6 +1,8 @@
 import crypto from 'crypto';
 import { Router, Request } from 'express';
-import { google } from 'googleapis';
+import { auth, drive as googleDrive } from '@googleapis/drive';
+import { oauth2 as googleOAuth2 } from '@googleapis/oauth2';
+import { sheets as googleSheets } from '@googleapis/sheets';
 import { requireAuth, requireSuperuser } from '../auth/middleware';
 import { prisma } from '../config/database';
 import { refreshRunProvider } from '../providers';
@@ -18,7 +20,7 @@ import { scheduleNextRefresh } from '../services/googleOAuth';
 const router = Router();
 
 // OAuth2 client configuration
-const oauth2Client = new google.auth.OAuth2(
+const oauth2Client = new auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
   `${appConfig.appUrl}/api/google/oauth/callback`
@@ -84,7 +86,7 @@ router.get('/oauth/callback', requireAuth, requireSuperuser, async (req, res) =>
     oauth2Client.setCredentials(tokens);
     
     // Get user's Google email
-    const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+    const oauth2 = googleOAuth2({ version: 'v2', auth: oauth2Client });
     const userInfo = await oauth2.userinfo.get();
     const googleEmail = userInfo.data.email || '';
 
@@ -97,8 +99,8 @@ router.get('/oauth/callback', requireAuth, requireSuperuser, async (req, res) =>
     }
 
     // Create Drive and Sheets clients
-    const drive = google.drive({ version: 'v3', auth: oauth2Client });
-    const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
+    const drive = googleDrive({ version: 'v3', auth: oauth2Client });
+    const sheets = googleSheets({ version: 'v4', auth: oauth2Client });
 
     // Search for existing "Bear Valley Run Checks" folder
     const folderSearchResponse = await drive.files.list({
